@@ -1,1 +1,2 @@
-
+zeroOS is an experimental, community-driven operating system project currently in its early bootloader stage (V0.0.1). Built from the ground up with a focus on minimalism and transparency, it invites developers and tech enthusiasts to explore, suggest, and iterate on its core code. Our goal is to evolve this experimental build into a robust, stable release through open collaboration.
+zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
