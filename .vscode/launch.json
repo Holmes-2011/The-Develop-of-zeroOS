@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "zaroOS: 调试内核 (QEMU + lldb)",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/build/kernel.elf",
+      "gdb-remote-port": 1234,
+      "gdb-remote-hostname": "127.0.0.1",
+      "preLaunchTask": "qemu: 启动调试服务",
+      "postDebugTask": "qemu: 停止调试服务"
+    }
+  ]
+}

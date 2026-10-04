@@ -1,0 +1,83 @@
+--- versions/v0.5-pic/upstream/isr.asm	2026-10-03 23:56:12
++++ isr.asm	2026-10-04 08:23:11
+@@ -24,6 +24,30 @@
+     jmp isr_common_stub
+ %endmacro
+ 
++; ─────────────────────────────────────────────────────────────────────────
++; 哪些异常会让 CPU 多压一个「错误码」？
++;
++; 压错误码的向量（必须用 ISR_ERRCODE）：8, 10, 11, 12, 13, 14, 17, 21, 29, 30
++; 不压的（用 ISR_NOERRCODE）：其余全部
++;
++; 依据：Intel SDM Vol.3A 6.3.1 / AMD APM Vol.2 8.4.2 的异常表。
++;       也可对照 rust-osdev/x86_64 crate 的 IDT 定义——那里用类型区分得很清楚：
++;       带 WithErrCode 的正是上面这 10 个。
++;
++; 注意几个容易搞错的：
++;   8  #DF 双重故障     → 压错误码（恒为 0）
++;   17 #AC 对齐检查     → 压错误码（恒为 0）；虽然叫"对齐检查"，但它是有错误码的
++;   18 #MC 机器检查     → 不压错误码
++;   20 #VE 虚拟化异常   → 不压错误码
++;   21 #CP 控制保护     → 压错误码
++;   28 #HV              → 不压错误码
++;   29 #VC VMM 通信     → 压错误码（AMD SEV-ES）
++;   30 #SX 安全异常     → 压错误码（Intel）
++;
++; 搞错的后果：栈上少压/多压 4 字节，regs 结构体整体错位，
++; 严重时 iret 会从错误的位置弹出返回地址。
++; ─────────────────────────────────────────────────────────────────────────
++
+ ISR_NOERRCODE 0    ; 除零
+ ISR_NOERRCODE 1    ; 调试
+ ISR_NOERRCODE 2    ; NMI
+@@ -32,30 +56,30 @@
+ ISR_NOERRCODE 5    ; 越界
+ ISR_NOERRCODE 6    ; 非法指令
+ ISR_NOERRCODE 7    ; 协处理器不可用
+-ISR_ERRCODE   8    ; 双重故障
+-ISR_NOERRCODE 9
++ISR_ERRCODE   8    ; 双重故障（错误码恒为 0）
++ISR_NOERRCODE 9    ; 协处理器段越界（已废弃）
+ ISR_ERRCODE   10   ; 无效TSS
+ ISR_ERRCODE   11   ; 段不存在
+ ISR_ERRCODE   12   ; 栈错误
+ ISR_ERRCODE   13   ; 通用保护错误
+ ISR_ERRCODE   14   ; 缺页
+-ISR_NOERRCODE 15
+-ISR_NOERRCODE 16
+-ISR_NOERRCODE 17
+-ISR_NOERRCODE 18
+-ISR_NOERRCODE 19
+-ISR_NOERRCODE 20
+-ISR_NOERRCODE 21
+-ISR_NOERRCODE 22
+-ISR_NOERRCODE 23
+-ISR_NOERRCODE 24
+-ISR_NOERRCODE 25
+-ISR_NOERRCODE 26
+-ISR_NOERRCODE 27
+-ISR_NOERRCODE 28
+-ISR_NOERRCODE 29
+-ISR_NOERRCODE 30
+-ISR_NOERRCODE 31
++ISR_NOERRCODE 15   ; 保留
++ISR_NOERRCODE 16   ; x87 浮点异常
++ISR_ERRCODE   17   ; 对齐检查（错误码恒为 0）
++ISR_NOERRCODE 18   ; 机器检查
++ISR_NOERRCODE 19   ; SIMD 浮点异常
++ISR_NOERRCODE 20   ; 虚拟化异常 #VE
++ISR_ERRCODE   21   ; 控制保护 #CP
++ISR_NOERRCODE 22   ; 保留
++ISR_NOERRCODE 23   ; 保留
++ISR_NOERRCODE 24   ; 保留
++ISR_NOERRCODE 25   ; 保留
++ISR_NOERRCODE 26   ; 保留
++ISR_NOERRCODE 27   ; 保留
++ISR_NOERRCODE 28   ; 超级调用注入 #HV
++ISR_ERRCODE   29   ; VMM 通信 #VC
++ISR_ERRCODE   30   ; 安全异常 #SX
++ISR_NOERRCODE 31   ; 保留
+ 
+ ; IRQ0~15（硬件中断）：PIC 重映射之后，这些实际对应的中断号是 32~47，
+ ; 不是它们原本的 0~15——跳的仍然是同一个 isr_common_stub，

@@ -1,0 +1,13 @@
+# 构建产物
+build/
+
+# 编译器中间文件
+*.o
+*.elf
+*.bin
+
+# 测试脚本产生的日志
+boot-test.log
+
+# macOS
+.DS_Store

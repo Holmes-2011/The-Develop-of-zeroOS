@@ -1,0 +1,50 @@
+ASM = nasm
+CC  = gcc
+LD  = ld
+CFLAGS = -m32 -ffreestanding -fno-pie -fno-stack-protector -Wall -Wextra -c
+
+# 必须和 boot.asm 里的 KERNEL_SECTORS 保持一致！
+# boot.asm 固定从磁盘读这么多扇区给内核，如果这里不把 kernel.bin 补齐到同样大小，
+# 磁盘镜像会比 boot.asm 要读的范围小，读出去的部分是未定义行为（越界读）。
+KERNEL_SECTORS = 40
+
+all: os-image.bin
+
+os-image.bin: boot.bin kernel.bin
+	cat boot.bin kernel.bin > os-image.bin
+
+boot.bin: boot.asm
+	$(ASM) boot.asm -f bin -o boot.bin
+
+kernel_entry.o: kernel_entry.asm
+	$(ASM) kernel_entry.asm -f elf32 -o kernel_entry.o
+
+kernel.o: kernel.c idt.h pic.h io.h
+	$(CC) $(CFLAGS) kernel.c -o kernel.o
+
+idt.o: idt.c idt.h
+	$(CC) $(CFLAGS) idt.c -o idt.o
+
+pic.o: pic.c pic.h io.h
+	$(CC) $(CFLAGS) pic.c -o pic.o
+
+isr.o: isr.asm
+	$(ASM) isr.asm -f elf32 -o isr.o
+
+kernel.bin: kernel_entry.o idt.o pic.o isr.o kernel.o link.ld
+	$(LD) -m elf_i386 -T link.ld -o kernel.elf kernel_entry.o idt.o pic.o isr.o kernel.o
+	objcopy -O binary kernel.elf kernel.bin
+	@size=$$(wc -c < kernel.bin); \
+	limit=$$(( $(KERNEL_SECTORS) * 512 )); \
+	if [ $$size -gt $$limit ]; then \
+		echo "错误：kernel.bin 实际 $$size 字节，超过 KERNEL_SECTORS=$(KERNEL_SECTORS) 能装下的 $$limit 字节。"; \
+		echo "请把这里和 boot.asm 里的 KERNEL_SECTORS 一起调大，再重新 make。"; \
+		exit 1; \
+	fi
+	truncate -s $$(( $(KERNEL_SECTORS) * 512 )) kernel.bin
+
+run: os-image.bin
+	qemu-system-i386 -drive format=raw,file=os-image.bin -serial stdio
+
+clean:
+	rm -f *.o *.bin *.elf os-image.bin
