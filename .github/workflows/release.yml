@@ -1,0 +1,78 @@
+name: 自动创建 Release
+
+# 推送 v* 形式的标签时自动建 Release。
+# 说明文字从 release-notes/<标签名>.md 读取，所以每个版本只需要维护一个 markdown 文件。
+#
+# 为什么这样做：创建 Release 需要调用 GitHub API，而本地只有 SSH 密钥（只能推 git）。
+# 用 workflow 的话，GitHub 自己会把 GITHUB_TOKEN 注入进来，不需要任何人在本地存凭据。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:        # 也允许在网页上手动触发
+
+permissions:
+  contents: write           # 建 Release 需要
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 找到该版本的说明文件
+        id: notes
+        run: |
+          set -e
+          TAG="${GITHUB_REF#refs/tags/}"
+          # 手动触发时没有 tag，用输入或直接报错
+          if [ -z "$TAG" ] || [ "$TAG" = "$GITHUB_REF" ]; then
+            echo "::error::这个 workflow 需要由标签推送触发（当前 ref: $GITHUB_REF）"
+            exit 1
+          fi
+          FILE="release-notes/${TAG}.md"
+          if [ ! -f "$FILE" ]; then
+            echo "::error::找不到说明文件 $FILE"
+            echo "提示：每个版本需要在 release-notes/ 下放一个 <标签名>.md"
+            exit 1
+          fi
+          # 标题取文件第一行，去掉开头的 "# "
+          TITLE="$(head -1 "$FILE" | sed 's/^#[[:space:]]*//')"
+          echo "tag=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "file=$FILE"   >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "──────────────────────────────"
+          echo "标签 : $TAG"
+          echo "标题 : $TITLE"
+          echo "说明 : $FILE（$(wc -l < "$FILE") 行）"
+          echo "──────────────────────────────"
+
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${{ steps.notes.outputs.tag }}"
+          TITLE="${{ steps.notes.outputs.title }}"
+          FILE="${{ steps.notes.outputs.file }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG 已存在，更新说明文字"
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$FILE"
+          else
+            echo "创建 Release $TAG"
+            gh release create "$TAG" \
+              --title "$TITLE" \
+              --notes-file "$FILE" \
+              --verify-tag
+          fi
+
+      - name: 结果
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "### ✅ Release ${{ steps.notes.outputs.tag }} 已就绪" >> "$GITHUB_STEP_SUMMARY"
+          gh release view "${{ steps.notes.outputs.tag }}" --json url,isDraft,isPrerelease \
+            --template '{{.url}}{{"\n"}}' >> "$GITHUB_STEP_SUMMARY"
