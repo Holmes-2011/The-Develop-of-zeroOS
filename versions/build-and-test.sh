@@ -32,14 +32,14 @@ BIOS="/Applications/UTM.app/Contents/Resources/qemu"
 # 搜索结果分两类，这一点很关键：
 #
 #   共享文件（boot.asm / entry.asm / link.ld）
-#       版本目录 → upstream/ → 工程根目录
-#       这三样从 v0.3 起就一直没随包发过，工程里只有一份，可以共用
+#       版本目录 → upstream/ → versions/v0.5.1/
+#       这三样从 v0.3 起就一直没随包发过，只在当前版本里有一份，可以共用
 #
 #   版本专属模块（kernel.c / idt.c / pic.c / isr.asm）
 #       **只在版本目录和它的 upstream/ 里找，绝不回落到工程根目录**
 #       否则 v0.2 会悄悄混进当前版本的 isr.asm/idt.c/pic.c，
 #       编出一个"四不像"的镜像，测试结果就全是错的
-SHARED_DIRS=("$VDIR" "$VDIR/upstream" "$PROJ")
+SHARED_DIRS=("$VDIR" "$VDIR/upstream" "$HERE/v0.5.1")
 MODULE_DIRS=("$VDIR" "$VDIR/upstream")
 
 find_in() {   # find_in <文件名> <目录...>  → 回显绝对路径

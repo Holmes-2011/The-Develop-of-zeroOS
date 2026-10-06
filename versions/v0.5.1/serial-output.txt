@@ -1,6 +1,6 @@
-# 由 build-and-test.sh 生成：v0.5.1-fix
+# 由 build-and-test.sh 生成：v0.5.1
 # 生成时间：2026-10-04 08:31:47
-# 命令：./build-and-test.sh v0.5.1-fix
+# 命令：./build-and-test.sh v0.5.1
 # 环境：QEMU 10.0.2 / -M pc (i440FX) / 32MB / 镜像 524344 字节
 # ────────────────────────────────────────────────
 zeroOS kernel v0.5: entered protected mode, kmain() started

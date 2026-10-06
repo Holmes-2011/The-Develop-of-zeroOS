@@ -32,7 +32,18 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 
 ---
 
-## 文件说明
+## 目录结构
+
+```
+README.md                项目说明（就是本文件）
+LICENSE                  Apache-2.0
+release-notes/           每个版本的 Release 说明文字
+.github/workflows/       推送 v* 标签时自动创建 Release
+versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
+└── v0.5.1/              ← 当前版本，要编译就进这个目录
+```
+
+**当前版本的源码在 `versions/v0.5.1/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> 用磁盘中断加载内核 -> 开 A20 -> 切到 32 位保护模式
@@ -45,7 +56,6 @@ io.h            端口读写公共函数（inb / outb）
 link.ld         告诉链接器内核要被放在内存的哪个地址（0x1000）
 Makefile        拼出可启动镜像 build/os-image.bin
 test-boot.sh    自动化引导测试（macOS / Linux 双平台可用）
-versions/       版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
 ```
 
 汇编部分加起来不到 300 行，只做"把 CPU 从 16 位带到 32 位 + 接管中断"这件事，
@@ -78,7 +88,7 @@ macOS 自带的是 clang 而不是 GNU gcc，而且 Apple 的 `ld` 只能生成 
 ## 编译 + 运行
 
 ```bash
-cd ~/Desktop/ZERO/zaroOS
+cd ~/Desktop/ZERO/zeroOS/versions/v0.5.1
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -87,20 +97,21 @@ make run    # 用 QEMU 启动它
 这是故意的：直接开机，不做开机动画/logo 这些"杂七杂八"的东西。
 
 想确认内核是不是真的跑起来了、而不是卡死在某一步，看终端里的串口输出就行——
-`make run` 已经加了 `-serial stdio`，正常情况下终端会打印：
+`make run` 已经加了 `-serial stdio`，正常情况下终端会打印**四行**：
 
 ```
-zeroOS kernel v0.3: entered protected mode, kmain() started
-zeroOS kernel v0.3: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.3: screen cleared, entering halt loop
+zeroOS kernel v0.5: entered protected mode, kmain() started
+zeroOS kernel v0.5: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.5: PIC remapped to 32-47, all IRQs masked
+zeroOS kernel v0.5: screen cleared, entering halt loop
 ```
 
 判断方法：
 
 - 一行都没出现 → 没进到 `kmain`，问题在 boot 这边（GDT / 保护模式切换）
 - 只出现第一行、没有第二行 → 卡在 `idt_install()` 附近
-- 只出现前两行、没有第三行 → 卡在 `clear_screen()` 附近
-- 三行都有、但屏幕上有花屏/乱码 → 问题反而不在逻辑上，多半是显存地址算错了
+- 只出现前三行、没有第四行 → 卡在 `clear_screen()` 附近
+- 四行都有、但屏幕上有花屏/乱码 → 问题反而不在逻辑上，多半是显存地址算错了
 
 ### 画面看不到怎么办：`make shot`
 
@@ -154,7 +165,7 @@ versions/
 ├── v0.3-idt/                     ← 含上游原始 zip（7 个文件）
 ├── v0.4-nosource/                ← 没收到源码，如实标注
 ├── v0.5-pic/                     ← 含上游原始 zip（9 个文件）
-├── v0.5.1-fix/                   ← 当前版本快照 + isr.asm.diff
+├── v0.5.1/                   ← 当前版本快照 + isr.asm.diff
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 
