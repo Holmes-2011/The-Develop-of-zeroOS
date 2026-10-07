@@ -80,7 +80,7 @@ echo "-------------------"
 EXPECTED_LINES=(
     "entered protected mode, kmain() started"
     "IDT installed, CPU exceptions now caught"
-    "PIC remapped to 32-47, all IRQs masked"
+    "PIT at 100 Hz, IRQ0 enabled"
     "screen cleared, entering halt loop"
 )
 

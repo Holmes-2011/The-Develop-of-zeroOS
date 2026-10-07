@@ -13,5 +13,6 @@ void pic_send_eoi(unsigned char irq);
 /* 把两片 PIC 的所有中断线全部屏蔽——现在还没写任何具体设备驱动（定时器/键盘），
    先全部关掉，只搭好重映射的地基，不让任何中断真的触发 */
 void pic_mask_all(void);
+void pic_unmask_irq(unsigned char irq);
 
 #endif

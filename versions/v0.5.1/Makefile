@@ -38,6 +38,7 @@ ENTRY_ASM  := entry.asm       # 32 位入口垫片（等价于你 Makefile 里�
 KERNEL_C   := kernel.c
 IDT_C      := idt.c
 PIC_C      := pic.c           # v0.5：8259 PIC 重映射
+PIT_C      := pit.c
 ISR_ASM    := isr.asm         # 0~31 号异常入口桩 + 32~47 号 IRQ 入口桩
 IDT_H      := idt.h
 PIC_H      := pic.h
@@ -51,6 +52,7 @@ ENTRY_OBJ  := $(BUILD)/entry.o
 KERNEL_OBJ := $(BUILD)/kernel.o
 IDT_OBJ    := $(BUILD)/idt.o
 PIC_OBJ    := $(BUILD)/pic.o
+PIT_OBJ    := $(BUILD)/pit.o
 ISR_OBJ    := $(BUILD)/isr.o
 KERNEL_ELF := $(BUILD)/kernel.elf
 KERNEL_BIN := $(BUILD)/kernel.bin
@@ -105,7 +107,7 @@ $(ISR_OBJ): $(ISR_ASM) | $(BUILD)
 	$(NASM) -f elf32 "$<" -o "$@"
 
 # 4. C 内核
-$(KERNEL_OBJ): $(KERNEL_C) $(IDT_H) $(PIC_H) $(IO_H) | $(BUILD)
+$(KERNEL_OBJ): $(KERNEL_C) $(IDT_H) $(PIC_H) $(IO_H) pit.h | $(BUILD)
 	clang $(CFLAGS) -c "$<" -o "$@"
 
 # 5. IDT 实现
@@ -116,15 +118,18 @@ $(IDT_OBJ): $(IDT_C) $(IDT_H) | $(BUILD)
 $(PIC_OBJ): $(PIC_C) $(PIC_H) $(IO_H) | $(BUILD)
 	clang $(CFLAGS) -c "$<" -o "$@"
 
+$(PIT_OBJ): $(PIT_C) pit.h $(IO_H) | $(BUILD)
+	clang $(CFLAGS) -c "$<" -o "$@"
+
 # 7. 链接到 0x1000（用 zig 自带的 LLD）
-$(KERNEL_ELF): $(ENTRY_OBJ) $(IDT_OBJ) $(PIC_OBJ) $(ISR_OBJ) $(KERNEL_OBJ) $(LINKER_LD)
+$(KERNEL_ELF): $(ENTRY_OBJ) $(IDT_OBJ) $(PIC_OBJ) $(PIT_OBJ) $(ISR_OBJ) $(KERNEL_OBJ) $(LINKER_LD)
 	$(ZIG) cc --target=x86-freestanding -nostdlib -fno-sanitize=all \
 	    -Wl,-T,"$(LINKER_LD)" -Wl,--build-id=none \
-	    -o "$@" $(ENTRY_OBJ) $(IDT_OBJ) $(PIC_OBJ) $(ISR_OBJ) $(KERNEL_OBJ)
+	    -o "$@" $(ENTRY_OBJ) $(IDT_OBJ) $(PIC_OBJ) $(PIT_OBJ) $(ISR_OBJ) $(KERNEL_OBJ)
 
 # 7. ELF -> 纯二进制，并补齐到引导层要读的扇区数
 $(KERNEL_BIN): $(KERNEL_ELF)
-	$(ZIG) objcopy -O binary "$<" "$@"
+	python3 elf_to_bin.py "$<" "$@"
 	@sz=$$(stat -f%z "$@"); want=$$(( $(KERNEL_SECTORS) * 512 )); \
 	 if [ $$sz -gt $$want ]; then \
 	   echo "错误：内核 $$sz 字节，超过引导层预留的 $$want 字节"; \

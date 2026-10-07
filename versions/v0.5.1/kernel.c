@@ -13,6 +13,7 @@
 #include "idt.h"
 #include "pic.h"
 #include "io.h"
+#include "pit.h"
 
 #define COM1 0x3F8
 
@@ -85,6 +86,7 @@ void isr_handler(struct registers *regs) {
         /* 硬件中断：现在还没有具体的设备驱动去处理它，但 EOI 必须发——
            不发的话 PIC 会以为这条中断线一直没处理完，之后再也收不到新的中断了 */
         unsigned char irq = (unsigned char) (regs->int_no - 32);
+        if (irq == 0) pit_tick();
         pic_send_eoi(irq);
     }
 }
@@ -97,8 +99,11 @@ void kmain(void) {
     serial_write_string("zeroOS kernel v0.5: IDT installed, CPU exceptions now caught\n");
 
     pic_remap(0x20, 0x28);   /* 把 IRQ0~15 挪到 32~47 号，避开和 CPU 异常撞车 */
-    pic_mask_all();          /* 地基先搭好，但所有硬件中断目前仍然全部屏蔽，不实际触发任何中断 */
-    serial_write_string("zeroOS kernel v0.5: PIC remapped to 32-47, all IRQs masked\n");
+    pic_mask_all();
+    pit_init(100);
+    pic_unmask_irq(0);
+    serial_write_string("zeroOS kernel v0.6: PIT at 100 Hz, IRQ0 enabled\n");
+    __asm__ __volatile__("sti");
 
     clear_screen();
     serial_write_string("zeroOS kernel v0.5: screen cleared, entering halt loop\n");
@@ -108,7 +113,5 @@ void kmain(void) {
        __asm__ __volatile__("int $0x0");
     */
 
-    while (1) {
-        __asm__ __volatile__("hlt");   /* 没事干就让 CPU 休息 */
-    }
+    { unsigned int last_report = 0; while (1) { unsigned int now = pit_ticks(); if (now - last_report >= 100) { last_report = now; serial_write_string("zeroOS timer tick\n"); } __asm__ __volatile__("hlt"); } }
 }
