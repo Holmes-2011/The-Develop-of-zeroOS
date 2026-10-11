@@ -1,0 +1,70 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "make - 构建可引导镜像",
+      "type": "shell",
+      "command": "make",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "make shot - 截图看画面（不依赖屏幕共享）",
+      "type": "shell",
+      "command": "make shot",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "make run - 启动 QEMU（需屏幕共享连 VNC）",
+      "type": "shell",
+      "command": "make run",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "qemu: 启动调试服务",
+      "type": "shell",
+      "command": "make debug-server",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "zaroos-qemu",
+        "pattern": [{ "regexp": "^(.*)$", "message": 1 }],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "ZAROOS_GDB_READY"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "qemu: 停止调试服务",
+      "type": "shell",
+      "command": "make debug-stop",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "silent", "panel": "shared" }
+    },
+    {
+      "label": "make disasm - 反汇编内核",
+      "type": "shell",
+      "command": "make disasm",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "make clean",
+      "type": "shell",
+      "command": "make clean",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    }
+  ]
+}

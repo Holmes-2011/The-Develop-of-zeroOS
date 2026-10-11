@@ -1,0 +1,314 @@
+#!/bin/bash
+# test-boot.sh —— 自动化引导测试，而不是人工盯着 QEMU 窗口看
+#
+# 这是把"审查代码"升级成"可重复测试"的第一步：以后每次改完代码，
+# 跑一下这个脚本，就知道有没有把之前跑通的东西改坏——这正是 Linux 内核
+# 持续集成那套逻辑的最小化版本：不是靠审查相信代码是对的，是靠反复跑验证它是对的。
+#
+# 用法：先 `make` 编译出 build/os-image.bin，再 `./test-boot.sh`
+#       换机型：MACHINE=q35 ./test-boot.sh（默认 pc）
+#
+# v0.7 起：通过 QEMU monitor 的 sendkey 模拟按键，验证键盘驱动；
+#          内核打出整行后脚本自己发 quit，所以不再需要 timeout 命令
+# v0.8 起：敲一串命令测命令行；再用 monitor 的 pmemsave 把显存（0xB8000）存下来，
+#          直接核对屏幕上的文字（包括写满一屏后的上滚、clear 清屏）
+#          换内存大小：MEM=128 ./test-boot.sh（默认 32，用来核对 mem 命令报的大小）
+# v0.9 起：跑 memtest（物理页 / 分页 / 堆自检，17 项），核对 E820 内存地图
+# v0.10 起：跑 cpu / mathtest / bench；换 CPU 型号：CPU=486 ./test-boot.sh
+#          （486 / pentium / pentium3 没有 SSE2，期望看到"浮点已关闭"而不是崩溃）
+# v0.10.1 起：核对时钟来源（TSC，486 退回数中断）；bench 之后再看一次 mem，堆要把内存还回来
+# v0.11 起：挂第二块测试硬盘（gen_testdisk.py 生成，8MB 图案 + 128GB 以外的几个扇区，稀疏文件），
+#          逐扇区校验；q35 机型没有老式 IDE 端口，要求正常启动并报告"没有 ATA 硬盘"
+#
+# ── 跨平台说明 ─────────────────────────────────────────────
+# 原版假设在 Linux/Kali 上跑（qemu-system-i386）。macOS 上没有，所以做了自动适配：
+#   * QEMU：优先用 PATH 里的 qemu-system-i386；找不到就用工具链里的启动器
+#           （~/Documents/Harness WorkSpace/c-dev-apps/toolchain/qemu-i386，
+#            它把 UTM 内置的 QEMU 封装成了命令行程序）
+set -u
+
+IMAGE="${1:-build/os-image.bin}"
+LOG="boot-test.log"
+TIMEOUT=8   # 秒。每一步（等启动、等整行输出）最多等这么久
+
+CDEV="${CDEV:-$HOME/Documents/Harness WorkSpace/c-dev-apps}"
+LAUNCHER="$CDEV/toolchain/qemu-i386"
+BIOS_DIR="/Applications/UTM.app/Contents/Resources/qemu"
+
+if [ ! -f "$IMAGE" ]; then
+    echo "错误：找不到 $IMAGE，先运行 make"
+    exit 1
+fi
+
+# ---- 挑一个能用的 QEMU ----
+QEMU=""
+EXTRA_ARGS=()
+if command -v qemu-system-i386 >/dev/null 2>&1; then
+    QEMU="$(command -v qemu-system-i386)"
+elif [ -x "$LAUNCHER" ]; then
+    QEMU="$LAUNCHER"
+    EXTRA_ARGS=(-L "$BIOS_DIR")     # 让 QEMU 找到 BIOS 固件
+else
+    echo "错误：既没有 qemu-system-i386，也找不到 $LAUNCHER"
+    echo "      装一个 QEMU（brew install qemu），或先构建工具链里的启动器"
+    exit 1
+fi
+
+echo "QEMU: $QEMU"
+MACHINE="${MACHINE:-pc}"
+MEM="${MEM:-32}"
+CPU="${CPU:-}"
+CPU_ARGS=()
+[ -n "$CPU" ] && CPU_ARGS=(-cpu "$CPU")
+case "$CPU" in
+    486|pentium|pentium2|pentium3) FLOAT=no ;;
+    *) FLOAT=yes ;;
+esac
+case "$CPU" in
+    486) CLOCK=pit ;;     # 486 没有 TSC
+    *)   CLOCK=tsc ;;
+esac
+echo "启动 QEMU（-M $MACHINE，${MEM} MB${CPU:+，-cpu $CPU}），用 monitor 的 sendkey 敲命令..."
+rm -f "$LOG" screen-1.bin screen-2.bin
+
+# 测试硬盘：8MB 图案 + LBA28 最后一个扇区、LBA48 第一个扇区、约 143GB 处的一个扇区
+TESTDISK=build/testdisk-test.img
+if [ ! -f "$TESTDISK" ]; then
+    echo "生成测试硬盘 $TESTDISK ..."
+    python3 gen_testdisk.py "$TESTDISK" 8 268435455 268435456 300000000 || exit 1
+fi
+case "$MACHINE" in
+    pc) ATA=yes ;;
+    *)  ATA=no ;;      # q35 的硬盘接在 AHCI 上，ATA 驱动找不到它们
+esac
+
+# 串口日志里 "zeroOS> " 提示符出现了几次 = 命令行已经处理完几行
+prompts() { grep -o "zeroOS> " "$LOG" 2>/dev/null | wc -l | tr -d ' '; }
+
+# 等某个条件成立，最多等 TIMEOUT 秒
+wait_until() {
+    local n=0
+    while [ "$n" -lt $((TIMEOUT * 10)) ]; do
+        eval "$1" && return 0
+        sleep 0.1
+        n=$((n + 1))
+    done
+    return 1
+}
+
+# 敲一行命令（一串 sendkey），然后等命令行打出下一个提示符
+type_line() {
+    local before k
+    before=$(prompts)
+    for k in "$@"; do
+        echo "sendkey $k"
+        sleep 0.03
+    done
+    echo "sendkey ret"
+    wait_until '[ "$(prompts)" -gt "$before" ]'
+}
+
+# 敲一串普通文字（小写字母、数字、空格）再回车
+type_text() {
+    local s="$1" i c keys=()
+    for ((i = 0; i < ${#s}; i++)); do
+        c="${s:$i:1}"
+        if [ "$c" = " " ]; then keys+=(spc); else keys+=("$c"); fi
+    done
+    type_line "${keys[@]}"
+}
+
+# 往 QEMU monitor 喂命令。无论哪一步超时，最后都会发 quit，QEMU 一定会退出
+feed_monitor() {
+    wait_until '[ "$(prompts)" -ge 1 ]'
+    type_line h e l p
+    type_line u p t i m e
+    type_line m e m
+    type_line m e m t e s t
+    type_line c p u
+    type_line m a t h t e s t
+    type_line b e n c h
+    type_line m e m
+    type_text "disks"
+    type_text "diskread ata0 0"
+    type_text "diskcheck ata1 0 16384"
+    type_text "diskcheck ata1 268435455 2"
+    type_text "diskcheck ata1 300000000 1"
+    type_text "diskbench ata1 8"
+    # echo Hi, zeroOS! —— 中间故意多敲一个 x 再退格删掉；覆盖 Shift、符号、空格、退格
+    type_line e c h o spc shift-h i comma spc z e r x backspace o shift-o shift-s shift-1
+    type_line f o o
+    type_line spc spc                     # 只有空格的行：什么都不做
+    type_line h e l p                     # 再来一次，让内容超过 25 行，触发上滚
+    echo "pmemsave 0xb8000 4000 screen-1.bin"
+    sleep 0.3
+    type_line c l e a r
+    echo "pmemsave 0xb8000 4000 screen-2.bin"
+    sleep 0.3
+    echo "quit"
+}
+
+feed_monitor | "$QEMU" "${EXTRA_ARGS[@]}" -M "$MACHINE" -m "$MEM" ${CPU_ARGS[@]+"${CPU_ARGS[@]}"} \
+    -drive format=raw,file="$IMAGE",index=0 \
+    -drive format=raw,file="$TESTDISK",index=1 \
+    -serial file:"$LOG" \
+    -display none \
+    -monitor stdio >/dev/null 2>&1
+
+echo "---- 串口输出 ----"
+cat "$LOG" 2>/dev/null || echo "(没有任何输出)"
+echo "-------------------"
+
+PASS=1
+check() {   # check <说明> <命令>：命令成功算通过
+    if eval "$2" >/dev/null 2>&1; then
+        echo "[通过] $1"
+    else
+        echo "[失败] $1"
+        PASS=0
+    fi
+}
+in_log() { grep -qF -- "$1" "$LOG"; }
+
+# 把显存（每个字符 2 字节：字符 + 颜色）还原成 25 行文字
+screen_text() {
+    python3 -c '
+import sys
+d = open(sys.argv[1], "rb").read()
+for r in range(25):
+    print(bytes(d[(r*80+c)*2] for c in range(80)).decode("ascii", "replace").rstrip())
+' "$1"
+}
+
+# ---- 串口：启动日志 ----
+for line in "entered protected mode, kmain() started" \
+            "IDT installed, CPU exceptions now caught" \
+            "PIT at 100 Hz, IRQ0 enabled" \
+            "PS/2 keyboard on IRQ1 enabled" \
+            "physical memory manager ready" \
+            "paging enabled, page 0 unmapped" \
+            "kernel heap ready at 0xD0000000" \
+            "shell ready on screen and COM1"; do
+    check "启动日志: $line" "in_log '$line'"
+done
+
+# ---- 串口：各个命令 ----
+if [ "$CLOCK" = tsc ]; then
+    check "启动日志: clock source: TSC" "in_log 'clock source: TSC'"
+else
+    check "启动日志: 没有 TSC，退回数时钟中断（$CPU）" "in_log 'clock source: timer interrupts (no TSC)'"
+fi
+if [ "$FLOAT" = yes ]; then
+    check "启动日志: FPU + SSE2 enabled" "in_log 'FPU + SSE2 enabled'"
+else
+    check "启动日志: 没有 SSE2，浮点已关闭（$CPU）" "in_log 'no SSE2 on this CPU, floating point disabled'"
+fi
+
+for c in help clear echo uptime mem memtest cpu mathtest bench version; do
+    check "help 列出了 $c" "grep -qE '^  $c +[a-z]' '$LOG'"
+done
+UP_LINE=$(grep -E '^uptime: [0-9]+\.[0-9]{2} s \(clock: (tsc|pit); [0-9]+ timer interrupts\)$' "$LOG" | head -1)
+UP_MS=$(echo "$UP_LINE" | sed -E 's/^uptime: ([0-9]+)\.([0-9]{2}) s.*/\1\20/')
+TICKS=$(echo "$UP_LINE" | sed -E 's/.*; ([0-9]+) timer interrupts\)$/\1/')
+check "uptime 格式正确、时钟来源 $CLOCK、时间和中断都在走（${UP_LINE:-?}）" \
+      '[ -n "$UP_LINE" ] && echo "$UP_LINE" | grep -q "clock: $CLOCK;" && [ "$UP_MS" -gt 0 ] && [ "$TICKS" -gt 0 ]'
+# 内核报的可用页数，和"按 BIOS 的 E820 地图自己算"的结果对账：
+#   自己算 = E820 里 usable 的记录与 [1MB, 3GB) 的交集（按整页）
+#   两者之差只能是内核 + 位图占掉的那几页（不到 1MB）
+# 不直接拿 -m 比：q35 机型 4GB 内存时，4GB 以下只放 2GB，其余在 4GB 以上（32 位用不到）
+USABLE=$(sed -n 's/^pages:  [0-9]* free \/ \([0-9]*\) usable.*/\1/p' "$LOG" | head -1)
+E820_PAGES=$(python3 -c '
+import re, sys
+total = 0
+text = open(sys.argv[1]).read()
+text = text[text.find("BIOS memory map"):]
+text = text[:text.find("\npages:")]          # 只看第一次 mem 打出的那张地图
+for m in re.finditer(r"^  0x([0-9A-F]{8}) - 0x([0-9A-F]{8})  usable$", text, re.M):
+    lo = max(int(m.group(1), 16), 0x100000); hi = min(int(m.group(2), 16), 0xC0000000)
+    lo = (lo + 4095) // 4096; hi = hi // 4096
+    if hi > lo: total += hi - lo
+print(total)' "$LOG")
+check "mem 的可用页数和 E820 对得上（内核报 ${USABLE:-?}，E820 算出 ${E820_PAGES:-?}）" \
+      '[ -n "$USABLE" ] && [ "$USABLE" -le "$E820_PAGES" ] && [ $((E820_PAGES - USABLE)) -lt 256 ]'
+check "mem 的可用内存不超过 -m $MEM MB" '[ -n "$USABLE" ] && [ $((USABLE * 4)) -le $((MEM * 1024)) ]'
+check "mem 列出了 E820 内存地图" "in_log 'BIOS memory map (E820):' && in_log '0x00100000 - '"
+check "mem: 内核在 1MB" "in_log 'kernel: 0x00100000 - 0x001'"
+check "mem: 分页已打开" "in_log 'paging: on, identity-mapped up to'"
+check "memtest 18/18 全部通过" "in_log 'memtest: 18/18 passed'"
+check "memtest 没有 [FAIL]" "! in_log '[FAIL]'"
+
+# ---- 串口：浮点 ----
+check "cpu 报了厂商和特性" "grep -qE '^vendor: ' '$LOG' && grep -qE '^features: fpu' '$LOG'"
+if [ "$FLOAT" = yes ]; then
+    check "cpu: 浮点已开启" "in_log 'floating point: enabled (x87 + SSE2)'"
+    check "mathtest 12/12 全部通过" "in_log 'mathtest: 12/12 passed'"
+    if in_log 'bench: not enough memory'; then
+        # bench 要约 6MB 内存；内存很小（比如 MEM=4）时应该报"内存不足"并正常返回，而不是崩溃
+        check "bench 内存不足时正确报错（MEM=$MEM）" "[ $MEM -lt 16 ]"
+    else
+        for k in f32 'q8 ' 'q4 '; do
+            RATE=$(grep -E "^  $k: [0-9]+\.[0-9] M multiply-adds/s$" "$LOG" | sed -E 's/.*: ([0-9]+)\..*/\1/' | head -1)
+            check "bench ${k% }: ${RATE:-?} M 次乘加/秒（> 0）" '[ -n "$RATE" ] && [ "$RATE" -gt 0 ]'
+        done
+        check "bench 给出了 1B / 3B 模型的估算" "grep -qE '4-bit: 1B model ~[0-9]+\.[0-9] s/token, 3B model' '$LOG'"
+        # bench 申请约 6MB、用完释放；之后的空闲页最多比 bench 之前少一点点（堆留 64KB 余量 + 页表）
+        P1=$(grep -E '^pages:  [0-9]+ free' "$LOG" | sed -n 1p | awk '{print $2}')
+        P2=$(grep -E '^pages:  [0-9]+ free' "$LOG" | sed -n 2p | awk '{print $2}')
+        check "bench 之后内存还回来了（空闲页 ${P1:-?} → ${P2:-?}）" '[ -n "$P2" ] && [ $((P1 - P2)) -le 20 ]'
+    fi
+else
+    check "cpu: 浮点已关闭" "in_log 'floating point: disabled'"
+    check "mathtest / bench 提示浮点不可用（而不是崩溃）" \
+          "[ \"\$(grep -c 'floating point is not enabled on this CPU' '$LOG')\" -eq 2 ]"
+fi
+check "没有出现 CPU 异常" "! in_log 'CPU exception ->'"
+
+# ---- 串口：硬盘 ----
+for c in disks diskread diskcheck diskbench; do
+    check "help 列出了 $c" "grep -qE '^  $c +[a-z<]' '$LOG'"
+done
+if [ "$ATA" = yes ]; then
+    check "启动日志: 找到 2 块 ATA 硬盘" "in_log 'ATA disks found: 2'"
+    check "disks: ata0 是 512KB 的启动盘" "in_log 'ata0: 512 KB, LBA48'"
+    check "disks: ata1 是 143GB 的测试盘（LBA48）" "in_log 'ata1: 143 GB, LBA48'"
+    check "diskread ata0 0：启动盘第 0 扇区有引导签名 55 AA" "in_log '... last 2 bytes: 55 AA (boot signature)'"
+    check "diskcheck：8MB 共 16384 个扇区全部正确" "in_log 'diskcheck: 16384 sectors, 0 bad'"
+    check "diskcheck：LBA28 / LBA48 交界的 2 个扇区正确" "in_log 'diskcheck: 2 sectors, 0 bad'"
+    check "diskcheck：约 143GB 处的扇区正确（48 位寻址）" "in_log 'diskcheck: 1 sectors, 0 bad'"
+    KBPS=$(sed -nE 's/^diskbench: read 8 MB in [0-9]+ ms = ([0-9]+) KB\/s$/\1/p' "$LOG" | head -1)
+    check "diskbench：读 8MB，${KBPS:-?} KB/s" '[ -n "$KBPS" ] && [ "$KBPS" -gt 0 ]'
+else
+    check "启动日志: 没有 ATA 硬盘（$MACHINE 用的是 AHCI），没有卡住" "in_log 'no ATA disks'"
+    check "disks 报告没有硬盘" "in_log 'no disks found'"
+    check "访问不存在的硬盘时正确报错" "in_log 'no such disk: ata0'"
+fi
+check "echo + Shift/符号/退格: Hi, zeroOS!" "grep -qx 'Hi, zeroOS!' '$LOG'"
+check "未知命令报错" "in_log \"unknown command: foo (type 'help')\""
+
+# ---- 屏幕（显存）----
+if [ -f screen-1.bin ] && [ -f screen-2.bin ]; then
+    screen_text screen-1.bin > screen-1.txt
+    screen_text screen-2.bin > screen-2.txt
+    echo "---- 屏幕（clear 之前）----"
+    cat screen-1.txt
+    echo "---------------------------"
+    check "屏幕上有命令输出 Hi, zeroOS!" "grep -qx 'Hi, zeroOS!' screen-1.txt"
+    check "屏幕上有未知命令提示" "grep -qF 'unknown command: foo' screen-1.txt"
+    check "写满一屏后上滚：最后一行是提示符" "[ \"\$(sed -n 25p screen-1.txt)\" = 'zeroOS>' ]"
+    check "写满一屏后上滚：欢迎语已滚出屏幕" "! grep -qF 'zeroOS v0.8' screen-1.txt"
+    check "clear 后第一行是提示符" "[ \"\$(sed -n 1p screen-2.txt)\" = 'zeroOS>' ]"
+    check "clear 后其余 24 行都是空的" "[ -z \"\$(sed -n '2,25p' screen-2.txt | tr -d '[:space:]')\" ]"
+else
+    check "拿到了显存快照" "false"
+fi
+rm -f screen-1.bin screen-2.bin screen-1.txt screen-2.txt
+
+echo ""
+if [ "$PASS" -eq 1 ]; then
+    echo "结果：全部通过"
+    exit 0
+else
+    echo "结果：有缺失。串口日志停在哪一行，问题大概率就在那一行之后的代码——"
+    echo "      对照 boot.asm / kernel.c 里对应位置的注释定位"
+    exit 1
+fi

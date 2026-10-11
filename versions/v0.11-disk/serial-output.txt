@@ -1,0 +1,150 @@
+zeroOS kernel v0.11: entered protected mode, kmain() started
+zeroOS kernel v0.11: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.11: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.11: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.11: FPU + SSE2 enabled
+zeroOS kernel v0.11: clock source: TSC
+zeroOS kernel v0.11: physical memory manager ready
+zeroOS kernel v0.11: paging enabled, page 0 unmapped
+zeroOS kernel v0.11: kernel heap ready at 0xD0000000
+zeroOS kernel v0.11: ATA disks found: 2
+zeroOS kernel v0.11: shell ready on screen and COM1
+zeroOS v0.11
+Type 'help' for a list of commands.
+
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  version   kernel version
+zeroOS> uptime
+uptime: 0.60 s (clock: tsc; 55 timer interrupts)
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7877 free / 7888 usable (31508 KB free)
+kernel: 0x00100000 - 0x0010E710, page bitmap up to 0x00110000
+paging: on, identity-mapped up to 0x01FE0000, 9 page tables
+heap:   0xD0000000, 4 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> memtest
+  [ok]   pmm: 64 pages are aligned, distinct, above the kernel
+  [ok]   pmm: free count dropped by 64
+  [ok]   pmm: 256 KB written and read back intact
+  [ok]   pmm: all pages returned
+  (a 'double free' warning is expected next)
+pmm: double free of page 0x0011B000
+  [ok]   pmm: double free detected, count unchanged
+  [ok]   paging: page 0 is unmapped (null pointers fault)
+  [ok]   paging: VGA memory is identity-mapped
+  [ok]   paging: map 0xE0000000 to a fresh page
+  [ok]   paging: write via virtual address, read via physical
+  [ok]   paging: unmap
+  [ok]   heap: kmalloc(0) returns null
+  [ok]   heap: 40 blocks of 1..500 bytes, 8-byte aligned
+  [ok]   heap: no two blocks overlap
+  [ok]   heap: free half, reallocate, all contents intact
+  [ok]   heap: everything freed and merged back together
+  [ok]   heap: 100 KB block (heap grows by mapping new pages)
+  [ok]   heap: freed pages go back to the page allocator
+  (a heap warning is expected next)
+heap: double free of 0xD0000010
+  [ok]   heap: double free detected, heap unchanged
+memtest: 18/18 passed
+zeroOS> cpu
+vendor: GenuineIntel
+model:  QEMU Virtual CPU version 2.5+
+features: fpu fxsr sse sse2 sse3 tsc
+floating point: enabled (x87 + SSE2)
+clock: TSC at 1000 MHz
+zeroOS> mathtest
+  [ok]   basic float arithmetic
+  [ok]   1/0 = +inf (no exception)
+  [ok]   0/0 = nan (no exception)
+  [ok]   sqrtf: 12 points, max error 0.19 eps (limit 1)
+  [ok]   expf : 82 points, max error 0.56 eps (limit 4)
+  [ok]   logf : 23 points, max error 0.47 eps (limit 4)
+  [ok]   sinf : 45 points, max error 0.34 eps (limit 4)
+  [ok]   cosf : 45 points, max error 0.25 eps (limit 4)
+  [ok]   tanhf: 44 points, max error 0.30 eps (limit 4)
+  powf : max error 2.89 eps
+  [ok]   powf within 32 eps (RoPE frequencies)
+  [ok]   special values (exp/log/sqrt)
+  [ok]   xmm0-7 survive 30 timer interrupts
+mathtest: 12/12 passed
+zeroOS> bench
+matrix x vector, 1024 x 1024, about 1 second each...
+  f32: 47.2 M multiply-adds/s
+  q8 : 37.9 M multiply-adds/s
+  q4 : 20.9 M multiply-adds/s
+estimated time per generated token (matrix work only):
+    8-bit: 1B model ~26.4 s/token, 3B model ~79.1 s/token
+    4-bit: 1B model ~47.8 s/token, 3B model ~143.4 s/token
+note: single core; under QEMU on a non-x86 Mac every x86 instruction is
+      emulated in software, so real x86 hardware is many times faster.
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7859 free / 7888 usable (31436 KB free)
+kernel: 0x00100000 - 0x0010E710, page bitmap up to 0x00110000
+paging: on, identity-mapped up to 0x01FE0000, 11 page tables
+heap:   0xD0000000, 68 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> disks
+ata0: 512 KB, LBA48, "QEMU HARDDISK"
+ata1: 143 GB, LBA48, "QEMU HARDDISK"
+zeroOS> diskread ata0 0
+FA 31 C0 8E D8 8E C0 8E D0 BC 00 7C FB 88 16 CF  .1.........|....
+7C BD 80 00 89 E8 83 F8 40 76 03 B8 40 00 A3 EB  |.......@v..@...
+7C C6 06 D0 7C 03 BE E9 7C 8A 16 CF 7C B4 42 CD  |...|...|...|.B.
+13 73 0F 30 E4 CD 13 FE 0E D0 7C 75 E9 BE D1 7C  .s.0......|u...|
+... last 2 bytes: 55 AA (boot signature)
+zeroOS> diskcheck ata1 0 16384
+diskcheck: 16384 sectors, 0 bad
+zeroOS> diskcheck ata1 268435455 2
+diskcheck: 2 sectors, 0 bad
+zeroOS> diskcheck ata1 300000000 1
+diskcheck: 1 sectors, 0 bad
+zeroOS> diskbench ata1 8
+diskbench: read 8 MB in 1644 ms = 4982 KB/s
+  loading 1 GB would take about 210 s, 1.5 GB about 315 s, 3 GB about 631 s
+zeroOS> echo Hi, zerx oOS!
+Hi, zeroOS!
+zeroOS> foo
+unknown command: foo (type 'help')
+zeroOS>   
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  version   kernel version
+zeroOS> clear
+zeroOS> 

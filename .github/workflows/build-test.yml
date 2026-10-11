@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  VERSION_DIR: versions/v0.10.1   # 当前版本；发新版时改这一行
+  VERSION_DIR: versions/v0.11-disk   # 当前版本；发新版时改这一行
 
 jobs:
   build-and-boot:
