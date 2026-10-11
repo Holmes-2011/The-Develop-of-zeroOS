@@ -1,0 +1,7 @@
+zeroOS kernel v0.7: entered protected mode, kmain() started
+zeroOS kernel v0.7: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.7: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.7: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.7: screen cleared, waiting for keyboard input
+Hello, zerx oOS! OK
+zeroOS input: Hello, zeroOS! OK (ticks=137)
