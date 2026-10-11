@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.7**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.8**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -12,9 +12,9 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 # 技术文档 —— x86 引导层 + 最小内核
 
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
-带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入。
+带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出和内核命令行。
 
-**当前版本：v0.7（PS/2 键盘）**
+**当前版本：v0.8（屏幕 + 内核命令行）**
 
 长期方向（系统内置 Agent）的设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -30,6 +30,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.6 的 PIT 定时器** | 本地新增：`pit.c`/`pit.h`（通道 0，100 Hz）、IRQ0 计数、`elf_to_bin.py` 替代会卡住的 `zig objcopy` |
 | **v0.6.1 的底层修正** | 本地修正：内存上限检查、`.bss` 清零、中断入口 `cld`、伪中断处理、可移植构建 + GitHub Actions |
 | **v0.7 的键盘驱动** | 本地新增：`keyboard.c`/`keyboard.h`（IRQ1、扫描码第 1 套、Shift / Caps Lock）、行输入回显、`sendkey` 自动按键测试 |
+| **v0.8 的屏幕和命令行** | 本地新增：`vga.c`（80×25 文字模式、滚屏、光标）、`console.c`（屏幕 + 串口）、`shell.c`（`help` / `clear` / `echo` / `uptime` / `mem` / `version`）、显存快照测试 |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
@@ -46,20 +47,24 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.7-keyboard/       ← 当前版本，要编译就进这个目录
+└── v0.8-shell/          ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.7-keyboard/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.8-shell/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> 用磁盘中断加载内核 -> 开 A20 -> 切到 32 位保护模式
 entry.asm       32 位汇编，只有几行：关中断 + 把控制权交给 C 函数 kmain()
-kernel.c        内核主体：串口调试输出 + 清屏 + 中断/异常分发
+kernel.c        中断/异常分发 + 内核入口 kmain()
+serial.c / .h   COM1 串口输出（调试日志、自动测试都靠它）
 idt.c / idt.h   中断描述符表（IDT），256 项，注册 0~47 号门
 isr.asm         0~31 号异常 + 0~15 号 IRQ 的入口桩，以及 idt_flush（lidt 指令）
 pic.c / pic.h   8259 PIC 重映射：硬件中断号从 0~15 挪到 32~47，避开 CPU 异常号
 pit.c / pit.h   8253/8254 PIT 定时器：通道 0 设成 100 Hz，每次 IRQ0 让 tick 加一
 keyboard.c / .h PS/2 键盘驱动：IRQ1 读扫描码 → 翻译成字符 → 环形缓冲区
+vga.c / vga.h   屏幕文字输出：80×25、16 色、硬件光标、写满自动上滚
+console.c / .h  同一份文字同时写屏幕和串口
+shell.c / .h    内核命令行：读一行 → 查命令表执行
 elf_to_bin.py   把 kernel.elf 转成纯二进制（替代会卡住的 zig objcopy）
 io.h            端口读写公共函数（inb / outb）
 link.ld         告诉链接器内核要被放在内存的哪个地址（0x1000）
@@ -104,41 +109,49 @@ sudo apt-get install nasm clang lld qemu-system-x86
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.7-keyboard
+cd zeroOS/versions/v0.8-shell
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
 
-如果一切正常，QEMU 窗口会直接变成一片纯黑，没有任何文字、没有图案——
-这是故意的：直接开机，不做开机动画/logo 这些"杂七杂八"的东西。
-
-想确认内核是不是真的跑起来了、而不是卡死在某一步，看终端里的串口输出就行——
-`make run` 已经加了 `-serial stdio`，正常情况下终端会打印**五行**：
+如果一切正常，QEMU 窗口里只有一句欢迎语和一个命令行提示符——
+直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS kernel v0.7: entered protected mode, kmain() started
-zeroOS kernel v0.7: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.7: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.7: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.7: screen cleared, waiting for keyboard input
+zeroOS v0.8
+Type 'help' for a list of commands.
+
+zeroOS> _
 ```
 
-然后**在 QEMU 的窗口里**（不是终端里）打字：键盘输入走的是模拟的 PS/2 键盘。
-敲的字会回显在终端里，按回车后内核把整行打出来：
+**在 QEMU 的窗口里**（不是终端里）打命令：
+
+| 命令 | 作用 |
+|---|---|
+| `help` | 列出所有命令 |
+| `clear` | 清屏 |
+| `echo ...` | 原样打印后面的文字 |
+| `uptime` | 开机多久了（秒 + 时钟中断次数） |
+| `mem` | 内存大小、内核占用的内存范围 |
+| `version` | 内核版本 |
+
+屏幕上的所有内容也会同步写到串口，`make run` 的终端里能看到一模一样的一份。
+终端里还会先打出**五行**启动日志：
 
 ```
-Hello, zeroOS!
-zeroOS input: Hello, zeroOS! (ticks=532)
+zeroOS kernel v0.8: entered protected mode, kmain() started
+zeroOS kernel v0.8: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.8: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.8: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.8: shell ready on screen and COM1
 ```
-
-`ticks` 是开机以来时钟中断的次数（每秒 100 次）。
 
 判断方法：
 
 - 一行都没出现 → 没进到 `kmain`，问题在 boot 这边（GDT / 保护模式切换）
 - 只出现第一行、没有第二行 → 卡在 `idt_install()` 附近
 - 五行都有、打字没反应 → 确认焦点在 QEMU 窗口里；仍不行就是键盘中断（IRQ1）的问题
-- 四行都有、但屏幕上有花屏/乱码 → 问题反而不在逻辑上，多半是显存地址算错了
+- 五行都有、终端里有命令输出、但屏幕上没有 → 问题在 `vga.c`（显存写入）
 
 ### 画面看不到怎么办：`make shot`
 
@@ -159,8 +172,11 @@ make shot
 终端会多打印一行：
 
 ```
-zeroOS kernel: CPU exception -> Division By Zero
+zeroOS kernel: CPU exception -> Division By Zero at EIP 0x0000131A
+system halted.
 ```
+
+（v0.8 起屏幕上也会用红字显示同样的内容）
 
 然后安全停机，而不是像以前那样 QEMU 窗口直接静默重启（没有 IDT 的情况下
 触发异常会变成三重故障）。
@@ -183,8 +199,10 @@ zeroOS kernel: CPU exception -> Division By Zero
   `test-boot.sh` 改成必须等到 tick 出现才算通过
 - **v0.6.1** — 底层修正，运行行为不变：构建时检查内存上限（含 `.bss`）；`entry.asm` 清零 `.bss`；
   中断入口 `cld`；处理 IRQ7/15 伪中断；`KERNEL_SECTORS` 只维护一处；构建可移植 + GitHub Actions 自动测试
-- **v0.7（当前）** — 新增 PS/2 键盘驱动（IRQ1）：Shift / Caps Lock / 退格 / 回车，字符回显到串口，回车打印整行；
+- **v0.7** — 新增 PS/2 键盘驱动（IRQ1）：Shift / Caps Lock / 退格 / 回车，字符回显到串口，回车打印整行；
   去掉每秒一行的 `timer tick`；测试改用 QEMU `sendkey` 自动按键
+- **v0.8（当前）** — 屏幕文字输出（80×25、滚屏、光标）+ 内核命令行（`help` / `clear` / `echo` / `uptime` / `mem` / `version`）；
+  屏幕和串口同步输出；异常信息显示在屏幕上；测试直接读显存核对屏幕内容
 
 ## 版本档案：`versions/`
 
@@ -202,7 +220,8 @@ versions/
 ├── v0.5.1/                   ← v0.5.1 快照 + isr.asm.diff
 ├── v0.6-pit/                 ← v0.6 快照
 ├── v0.6.1/                   ← v0.6.1 快照
-├── v0.7-keyboard/            ← 当前版本
+├── v0.7-keyboard/            ← v0.7 快照
+├── v0.8-shell/               ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 

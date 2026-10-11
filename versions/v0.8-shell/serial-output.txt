@@ -1,0 +1,36 @@
+zeroOS kernel v0.8: entered protected mode, kmain() started
+zeroOS kernel v0.8: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.8: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.8: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.8: shell ready on screen and COM1
+zeroOS v0.8
+Type 'help' for a list of commands.
+
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory size and kernel layout
+  version   kernel version
+zeroOS> uptime
+uptime: 0.46 s (46 ticks)
+zeroOS> mem
+RAM:    32768 KB (32 MB, from CMOS)
+kernel: 0x00001000 - 0x000035A4 (9636 bytes incl. .bss, limit 0x00007C00)
+stack:  grows down from 0x00090000
+note:   no memory manager yet (planned for v0.9)
+zeroOS> echo Hi, zerx oOS!
+Hi, zeroOS!
+zeroOS> foo
+unknown command: foo (type 'help')
+zeroOS>   
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory size and kernel layout
+  version   kernel version
+zeroOS> clear
+zeroOS> 

@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  VERSION_DIR: versions/v0.7-keyboard   # 当前版本；发新版时改这一行
+  VERSION_DIR: versions/v0.8-shell   # 当前版本；发新版时改这一行
 
 jobs:
   build-and-boot:
@@ -28,13 +28,17 @@ jobs:
         working-directory: ${{ env.VERSION_DIR }}
         run: make
 
-      - name: QEMU 启动 + 键盘测试（-M pc）
+      - name: QEMU 启动 + 命令行测试（-M pc）
         working-directory: ${{ env.VERSION_DIR }}
         run: ./test-boot.sh
 
-      - name: QEMU 启动 + 键盘测试（-M q35）
+      - name: QEMU 启动 + 命令行测试（-M q35）
         working-directory: ${{ env.VERSION_DIR }}
         run: MACHINE=q35 ./test-boot.sh
+
+      - name: QEMU 启动 + 命令行测试（128 MB 内存，核对 mem 命令）
+        working-directory: ${{ env.VERSION_DIR }}
+        run: MEM=128 ./test-boot.sh
 
       - name: 上传串口日志
         if: always()
