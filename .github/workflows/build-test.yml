@@ -1,0 +1,41 @@
+name: 编译 + 启动测试
+
+# 每次推送 / 提 PR，都在干净的 Linux 上从零编译当前版本，并用 QEMU 真正启动一次。
+# 这样贡献者不需要有作者本机的 c-dev-apps 工具链，也能知道自己的改动有没有把内核弄坏。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  VERSION_DIR: versions/v0.6.1   # 当前版本；发新版时改这一行
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装工具链（nasm / clang / ld.lld / qemu）
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q nasm clang lld qemu-system-x86
+
+      - name: 编译
+        working-directory: ${{ env.VERSION_DIR }}
+        run: make
+
+      - name: QEMU 启动测试（-M pc）
+        working-directory: ${{ env.VERSION_DIR }}
+        run: ./test-boot.sh
+
+      - name: 上传串口日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-test-log
+          path: ${{ env.VERSION_DIR }}/boot-test.log
+          if-no-files-found: ignore

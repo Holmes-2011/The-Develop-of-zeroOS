@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.6**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.6.1**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -14,7 +14,9 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
 带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断。
 
-**当前版本：v0.6（PIT 定时器）**
+**当前版本：v0.6.1（PIT 定时器 + 底层修正）**
+
+长期方向（系统内置 Agent）的设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -26,6 +28,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.1 ~ v0.5 的上游源码** | 由 **Claude Chat** 编写。原始压缩包完整保存在 `versions/v0.3-idt/upstream-source.zip` 和 `versions/v0.5-pic/upstream-source.zip`，未做改动 |
 | **v0.5.1 的修正** | 本地修正（共 5 项，详见下方"版本记录"）：17/21/29/30 号异常的错误码分类、引导层补 `cli`、镜像补零兼容 AHCI、macOS 原生构建、测试脚本跨平台 |
 | **v0.6 的 PIT 定时器** | 本地新增：`pit.c`/`pit.h`（通道 0，100 Hz）、IRQ0 计数、`elf_to_bin.py` 替代会卡住的 `zig objcopy` |
+| **v0.6.1 的底层修正** | 本地修正：内存上限检查、`.bss` 清零、中断入口 `cld`、伪中断处理、可移植构建 + GitHub Actions |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
@@ -39,12 +42,13 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 README.md                项目说明（就是本文件）
 LICENSE                  Apache-2.0
 release-notes/           每个版本的 Release 说明文字
-.github/workflows/       推送 v* 标签时自动创建 Release
+.github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
+docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.6-pit/            ← 当前版本，要编译就进这个目录
+└── v0.6.1/              ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.6-pit/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.6.1/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> 用磁盘中断加载内核 -> 开 A20 -> 切到 32 位保护模式
@@ -84,14 +88,21 @@ macOS 自带的是 clang 而不是 GNU gcc，而且 Apple 的 `ld` 只能生成 
 |---|---|
 | `nasm` | 工作区里的 NASM 3.02 |
 | `gcc -m32 -ffreestanding` | 系统自带 clang + `--target=i386-unknown-none` |
-| `ld -m elf_i386` | Zig 内置的 **LLD**（`zig cc` 驱动） |
-| `objcopy -O binary` | `zig objcopy` |
+| `ld -m elf_i386` | Zig 内置的 **LLD**（`zig ld.lld`） |
+| `objcopy -O binary` | `elf_to_bin.py`（几十行 Python，`zig objcopy` 曾经卡住） |
 | `qemu-system-i386` | UTM 内置的 QEMU（封装成 `toolchain/qemu-i386`） |
+
+**没有这套工具链也能编译**（v0.6.1 起）：Makefile 找不到它时会自动改用系统里的
+`nasm` / `clang` / `ld.lld` / `qemu-system-i386`。Linux 上装好这几个包直接 `make` 即可：
+
+```bash
+sudo apt-get install nasm clang lld qemu-system-x86
+```
 
 ## 编译 + 运行
 
 ```bash
-cd ~/Desktop/ZERO/zeroOS/versions/v0.6-pit
+cd zeroOS/versions/v0.6.1
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -103,10 +114,10 @@ make run    # 用 QEMU 启动它
 `make run` 已经加了 `-serial stdio`，正常情况下终端会先打印**四行**，然后**每秒一行** `timer tick`：
 
 ```
-zeroOS kernel v0.5: entered protected mode, kmain() started
-zeroOS kernel v0.5: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.6: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.5: screen cleared, entering halt loop
+zeroOS kernel v0.6.1: entered protected mode, kmain() started
+zeroOS kernel v0.6.1: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.6.1: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.6.1: screen cleared, entering halt loop
 zeroOS timer tick
 zeroOS timer tick
 ...
@@ -157,9 +168,11 @@ zeroOS kernel: CPU exception -> Division By Zero
 - **v0.5.1** — 本地修正版：修掉 17/21/29/30 号异常的错误码分类；
   引导层补 `cli`；镜像补零到 512 KB 兼容 AHCI；Makefile 改成 macOS 原生；
   `test-boot.sh` 改成跨平台
-- **v0.6（当前）** — 新增 PIT 定时器（`pit.c`/`pit.h`）：通道 0 设成 100 Hz，解除 IRQ0 屏蔽并 `sti`，
+- **v0.6** — 新增 PIT 定时器（`pit.c`/`pit.h`）：通道 0 设成 100 Hz，解除 IRQ0 屏蔽并 `sti`，
   每 100 个 tick 往串口打一行 `timer tick`；`elf_to_bin.py` 替代会卡住的 `zig objcopy`；
   `test-boot.sh` 改成必须等到 tick 出现才算通过
+- **v0.6.1（当前）** — 底层修正，运行行为不变：构建时检查内存上限（含 `.bss`）；`entry.asm` 清零 `.bss`；
+  中断入口 `cld`；处理 IRQ7/15 伪中断；`KERNEL_SECTORS` 只维护一处；构建可移植 + GitHub Actions 自动测试
 
 ## 版本档案：`versions/`
 
@@ -175,7 +188,8 @@ versions/
 ├── v0.4-nosource/                ← 没收到源码，如实标注
 ├── v0.5-pic/                     ← 含上游原始 zip（9 个文件）
 ├── v0.5.1/                   ← v0.5.1 快照 + isr.asm.diff
-├── v0.6-pit/                 ← 当前版本
+├── v0.6-pit/                 ← v0.6 快照
+├── v0.6.1/                   ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 
