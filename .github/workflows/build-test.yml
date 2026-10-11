@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  VERSION_DIR: versions/v0.9-memory   # 当前版本；发新版时改这一行
+  VERSION_DIR: versions/v0.10-float   # 当前版本；发新版时改这一行
 
 jobs:
   build-and-boot:
@@ -43,6 +43,10 @@ jobs:
       - name: QEMU 启动 + 命令行测试（4 GB 内存 + q35：4GB 以上的内存要被正确跳过）
         working-directory: ${{ env.VERSION_DIR }}
         run: MACHINE=q35 MEM=4096 ./test-boot.sh
+
+      - name: QEMU 启动 + 命令行测试（486：没有 SSE2，要能正常启动并关闭浮点）
+        working-directory: ${{ env.VERSION_DIR }}
+        run: CPU=486 ./test-boot.sh
 
       - name: 上传串口日志
         if: always()

@@ -1,0 +1,71 @@
+zeroOS kernel v0.9: entered protected mode, kmain() started
+zeroOS kernel v0.9: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.9: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.9: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.9: physical memory manager ready
+zeroOS kernel v0.9: paging enabled, page 0 unmapped
+zeroOS kernel v0.9: kernel heap ready at 0xD0000000
+zeroOS kernel v0.9: shell ready on screen and COM1
+zeroOS v0.9
+Type 'help' for a list of commands.
+
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  version   kernel version
+zeroOS> uptime
+uptime: 0.45 s (45 ticks)
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7883 free / 7894 usable (31532 KB free)
+kernel: 0x00100000 - 0x00108B94, page bitmap up to 0x0010A000
+paging: on, identity-mapped up to 0x01FE0000, 9 page tables
+heap:   0xD0000000, 4 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> memtest
+  [ok]   pmm: 64 pages are aligned, distinct, above the kernel
+  [ok]   pmm: free count dropped by 64
+  [ok]   pmm: 256 KB written and read back intact
+  [ok]   pmm: all pages returned
+  (a 'double free' warning is expected next)
+pmm: double free of page 0x00115000
+  [ok]   pmm: double free detected, count unchanged
+  [ok]   paging: page 0 is unmapped (null pointers fault)
+  [ok]   paging: VGA memory is identity-mapped
+  [ok]   paging: map 0xE0000000 to a fresh page
+  [ok]   paging: write via virtual address, read via physical
+  [ok]   paging: unmap
+  [ok]   heap: kmalloc(0) returns null
+  [ok]   heap: 40 blocks of 1..500 bytes, 8-byte aligned
+  [ok]   heap: no two blocks overlap
+  [ok]   heap: free half, reallocate, all contents intact
+  [ok]   heap: everything freed and merged back together
+  [ok]   heap: 100 KB block (heap grows by mapping new pages)
+  (a heap warning is expected next)
+heap: double free of 0xD0000010
+  [ok]   heap: double free detected, heap unchanged
+memtest: 17/17 passed
+zeroOS> echo Hi, zerx oOS!
+Hi, zeroOS!
+zeroOS> foo
+unknown command: foo (type 'help')
+zeroOS>   
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  version   kernel version
+zeroOS> clear
+zeroOS> 
