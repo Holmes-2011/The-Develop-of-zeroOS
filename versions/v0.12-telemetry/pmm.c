@@ -1,6 +1,7 @@
 #include "pmm.h"
 #include "boot_info.h"
 #include "console.h"
+#include "telemetry.h"
 
 extern char __kernel_end[];   /* link.ld 导出：内核（含 .bss）在内存里的末端 */
 
@@ -118,6 +119,7 @@ unsigned int pmm_alloc_page(void) {
             set_bit(f);
             free_pages--;
             search_hint = f + 1;
+            tel_page_alloc();
             return f * PAGE_SIZE;
         }
         f++;
@@ -132,15 +134,18 @@ void pmm_free_page(unsigned int addr) {
         console_write("pmm: refusing to free invalid page ");
         console_write_hex(addr);
         console_putc('\n');
+        tel_page_bad_free(addr);
         return;
     }
     if (!test_bit(f)) {
         console_write("pmm: double free of page ");
         console_write_hex(addr);
         console_putc('\n');
+        tel_page_bad_free(addr);
         return;
     }
     clear_bit(f);
+    tel_page_free();
     free_pages++;
     if (f < search_hint) search_hint = f;
 }

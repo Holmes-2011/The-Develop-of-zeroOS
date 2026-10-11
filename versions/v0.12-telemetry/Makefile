@@ -56,8 +56,22 @@ LINKER_LD  := link.ld
 #   console  屏幕 + 串口同时输出（v0.8） shell    内核命令行（v0.8）
 #   pmm      物理页分配（v0.9）         paging   分页（v0.9）
 #   heap     kmalloc / kfree（v0.9）    memtest  内存自检命令（v0.9）
+#   kstring  memset / memcpy 等（v0.10） cpu      CPUID、开启 FPU / SSE（v0.10）
+#   time     开机时间：TSC 校准（v0.10.1）
+#   blockdev 块设备接口（v0.11）         ata      ATA/IDE 硬盘，PIO（v0.11）
+#   disktest disks / diskread / diskcheck / diskbench 命令（v0.11）
+#   telemetry 感知层：计数器、采样、事件日志（v0.12）
+#   demand   按需分页区（v0.12）         telcmd   metrics / events / telstream 命令（v0.12）
 C_SRCS     := kernel.c serial.c idt.c pic.c pit.c keyboard.c vga.c console.c shell.c \
-              pmm.c paging.c heap.c memtest.c
+              pmm.c paging.c heap.c memtest.c kstring.c cpu.c time.c \
+              blockdev.c ata.c disktest.c telemetry.c demand.c telcmd.c
+
+# 用到浮点 / SSE 的源文件（v0.10）：单独用 CFLAGS_SIMD 编译。
+# 规矩：这些代码只能在主循环里运行，不能在中断里被调用（原因见 cpu.h）
+#   kmath     数学函数        floattest mathtest 命令
+#   bench     bench 命令      simd_test 验证中断不破坏 XMM 寄存器（汇编）
+SIMD_SRCS  := kmath.c floattest.c bench.c
+SIMD_ASM   := simd_test.asm
 HEADERS    := $(wildcard *.h)
 
 # ---------- 产物 ----------
@@ -66,7 +80,9 @@ BOOT_BIN   := $(BUILD)/boot.bin
 ENTRY_OBJ  := $(BUILD)/entry.o
 ISR_OBJ    := $(BUILD)/isr.o
 C_OBJS     := $(C_SRCS:%.c=$(BUILD)/%.o)
-KERNEL_OBJS:= $(ENTRY_OBJ) $(ISR_OBJ) $(C_OBJS)   # entry.o 放第一个只是习惯；真正保证它在 0x100000 的是 link.ld
+SIMD_OBJS  := $(SIMD_SRCS:%.c=$(BUILD)/simd/%.o) $(SIMD_ASM:%.asm=$(BUILD)/simd/%.o)
+CORE_OBJS  := $(ENTRY_OBJ) $(ISR_OBJ) $(C_OBJS)
+KERNEL_OBJS:= $(CORE_OBJS) $(SIMD_OBJS)   # entry.o 放第一个只是习惯；真正保证它在 0x100000 的是 link.ld
 KERNEL_ELF := $(BUILD)/kernel.elf
 KERNEL_BIN := $(BUILD)/kernel.bin
 IMAGE      := $(BUILD)/os-image.bin
@@ -96,12 +112,25 @@ IMAGE_MIN_BYTES := 524288
 # -fno-pic                   : 内核固定在 0x100000（1MB），不需要位置无关代码
 # -mno-mmx -mno-sse -mno-sse2 -mno-avx :
 #                              不许编译器用 MMX/SSE/AVX 寄存器（v0.9 起）。clang 默认的 i386 目标
-#                              是 Pentium 4，-O2 会把循环自动改写成 SSE 向量指令；但内核没有开启 SSE
-#                              （CR4.OSFXSR），一执行就是"非法指令"。内核要用浮点/向量时，
-#                              还得在每次中断、任务切换时保存这些寄存器——那是以后的事
-CFLAGS := --target=i386-unknown-none -ffreestanding -fno-builtin \
-          -fno-stack-protector -fno-pic -O2 -Wall -Wextra \
-          -mno-mmx -mno-sse -mno-sse2 -mno-avx
+#                              是 Pentium 4，-O2 会把循环自动改写成 SSE 向量指令。v0.9 时 SSE 还没开启，
+#                              一执行就是"非法指令"；v0.10 开启了 SSE，但核心代码仍然不许用——
+#                              中断处理程序一旦动了 XMM 寄存器，就会破坏被打断的 SSE 计算
+#
+# v0.10 起分成两组：
+#   CFLAGS_CORE  核心代码（含所有中断处理程序）：连 x87 浮点也禁掉（-mno-80387），
+#                写了浮点运算直接编译失败——这样中断里就绝不会动到浮点 / XMM 寄存器
+#   CFLAGS_SIMD  数学和推理代码：允许 SSE2（不许 AVX：不是所有 x86 CPU 都有）。
+#                -mstackrealign：函数入口把栈对齐到 16 字节，SSE 存取栈上变量时要求对齐，
+#                而调用它的核心代码不保证这一点
+CFLAGS_BASE := --target=i386-unknown-none -ffreestanding -fno-builtin \
+               -fno-stack-protector -fno-pic -O2 -Wall -Wextra
+#
+# -march：核心代码按 486 生成指令（v0.10 起）。不写的话 clang 按 Pentium 4 生成，会用到 cmov
+#         （1995 年的 Pentium Pro 才有），在 486 / 初代 Pentium 上一执行就是"非法指令"——
+#         v0.10 用 QEMU 的 -cpu 486 实测发现的；v0.6 ~ v0.9 实际上都要求 Pentium Pro 以上。
+#         SIMD 代码只在检测到 SSE2 之后才会运行，所以照常按 Pentium 4 生成
+CFLAGS_CORE := $(CFLAGS_BASE) -march=i486 -mno-mmx -mno-sse -mno-sse2 -mno-avx -mno-80387
+CFLAGS_SIMD := $(CFLAGS_BASE) -march=pentium4 -mno-mmx -msse -msse2 -mfpmath=sse -mno-avx -mstackrealign
 
 # Zig 需要一个可写的全局缓存目录（可通过命令行覆盖）
 export ZIG_GLOBAL_CACHE_DIR ?= $(HOME)/.cache/zig
@@ -130,17 +159,31 @@ $(ISR_OBJ): $(ISR_ASM) | $(BUILD)
 # 4. 所有 C 文件：一条通用规则。任何头文件改了都全部重编——文件很少，几乎不花时间，
 #    换来的是不会因为漏写依赖而用到旧的 .o
 $(BUILD)/%.o: %.c $(HEADERS) | $(BUILD)
-	$(KCC) $(CFLAGS) -c "$<" -o "$@"
+	$(KCC) $(CFLAGS_CORE) -c "$<" -o "$@"
+
+$(BUILD)/simd/%.o: %.c $(HEADERS) | $(BUILD)
+	@mkdir -p $(BUILD)/simd
+	$(KCC) $(CFLAGS_SIMD) -c "$<" -o "$@"
+
+$(BUILD)/simd/%.o: %.asm | $(BUILD)
+	@mkdir -p $(BUILD)/simd
+	$(NASM) -f elf32 "$<" -o "$@"
 
 # 5. 链接到 0x100000（直接调 LLD，不再经过 zig cc）
-#    链接完再扫一遍：内核里不能出现 MMX/SSE/AVX 指令（原因见上面 CFLAGS 的说明）
+#    链接完再扫一遍（原因见上面 CFLAGS 的说明）：
+#      核心代码里不能有任何浮点 / MMX / SSE / AVX 指令；
+#      整个内核里不能有 AVX（ymm 寄存器）
 $(KERNEL_ELF): $(KERNEL_OBJS) $(LINKER_LD)
 	$(LLD) -m elf_i386 -T "$(LINKER_LD)" --build-id=none -o "$@" $(KERNEL_OBJS)
 	@if command -v objdump >/dev/null 2>&1; then \
-	   n=$$(objdump -d "$@" | grep -cE '%(x|y)mm[0-9]|%mm[0-9]'); \
-	   if [ "$$n" -ne 0 ]; then echo "错误：内核里有 $$n 条 MMX/SSE/AVX 指令，CPU 没开启它们，执行到就是非法指令"; rm -f "$@"; exit 1; fi; \
-	   echo "  无 MMX/SSE/AVX 指令  OK"; \
-	 else echo "  （没有 objdump，跳过 SSE 指令检查）"; fi
+	   n=$$(objdump -d $(CORE_OBJS) | grep -cE '%(x|y)mm[0-9]|%mm[0-9]|%st'); \
+	   if [ "$$n" -ne 0 ]; then echo "错误：核心代码里有 $$n 条浮点 / SSE 指令——中断里会破坏 SSE 计算的现场"; rm -f "$@"; exit 1; fi; \
+	   n=$$(objdump -d $(CORE_OBJS) | grep -cE 'cmov'); \
+	   if [ "$$n" -ne 0 ]; then echo "错误：核心代码里有 $$n 条 cmov（486 / Pentium 上是非法指令）"; rm -f "$@"; exit 1; fi; \
+	   n=$$(objdump -d "$@" | grep -cE '%ymm[0-9]'); \
+	   if [ "$$n" -ne 0 ]; then echo "错误：内核里有 $$n 条 AVX 指令"; rm -f "$@"; exit 1; fi; \
+	   echo "  核心代码无浮点 / SSE / cmov 指令，全内核无 AVX  OK"; \
+	 else echo "  （没有 objdump，跳过指令检查）"; fi
 
 # 6. ELF -> 纯二进制，并补齐到引导层要读的扇区数
 #    --mem-limit：内核（含 .bss）控制在 4MB 以内（v0.9 以前是 0x7C00）。

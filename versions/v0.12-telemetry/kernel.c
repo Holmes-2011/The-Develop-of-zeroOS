@@ -13,6 +13,13 @@
  *       行输入从这里搬到 shell.c，变成真正的命令行（help / uptime / mem ……）。
  * v0.9：内核搬到 1MB；物理页分配（pmm.c）、分页（paging.c）、内核堆（heap.c）。
  *       缺页异常（#PF）会报出是哪个地址、读还是写。
+ * v0.10：开启 FPU / SSE2（cpu.c），数学函数（kmath.c），mathtest / bench 命令。
+ *        本文件属于"核心代码"，用 -mno-sse -mno-80387 编译，不能有任何浮点运算。
+ * v0.10.1：开机时间改用 TSC（time.c），满负荷时不再因为丢时钟中断而变慢；
+ *          堆会把末尾空出来的页还给物理页分配器。
+ * v0.11：块设备接口（blockdev.c）+ ATA PIO 硬盘驱动（ata.c）。
+ * v0.12：感知层（telemetry.c）：各子系统的计数器、每 100 毫秒采样一次、事件日志；
+ *        按需分页区（demand.c）：那段地址里的缺页现场补一页、继续运行，而不是停机。
  */
 
 #include "idt.h"
@@ -25,6 +32,11 @@
 #include "pmm.h"
 #include "paging.h"
 #include "heap.h"
+#include "cpu.h"
+#include "time.h"
+#include "ata.h"
+#include "telemetry.h"
+#include "demand.h"
 
 /* isr.asm 里每个异常入口最终都会统一跳到这里，regs 指向被保存下来的寄存器现场 */
 struct registers {
@@ -47,6 +59,12 @@ static const char *exception_messages[32] = {
 /* isr_common_stub 统一跳到这里——用 int_no 区分是"CPU 异常"(0~31)还是"硬件中断"(32~47) */
 void isr_handler(struct registers *regs) {
     if (regs->int_no < 32) {
+        if (regs->int_no == 14) {
+            /* 按需分页区里的缺页：补一页、返回，CPU 会重新执行那条指令（见 demand.h） */
+            unsigned int cr2;
+            __asm__ __volatile__("mov %%cr2, %0" : "=r"(cr2));
+            if (demand_handle_fault(cr2, regs->err_code)) return;
+        }
         /* 屏幕和串口都打：屏幕给人看，串口给测试和调试看 */
         console_set_color(VGA_LIGHT_RED);
         console_write("\nzeroOS kernel: CPU exception -> ");
@@ -74,8 +92,15 @@ void isr_handler(struct registers *regs) {
         /* 硬件中断：交给对应的驱动，然后必须发 EOI——
            不发的话 PIC 会以为这条中断线一直没处理完，之后再也收不到新的中断了 */
         unsigned char irq = (unsigned char) (regs->int_no - 32);
-        if (pic_is_spurious(irq)) return;   /* 伪中断不能发 EOI，见 pic.h */
-        if (irq == 0) pit_tick();
+        if (pic_is_spurious(irq)) {         /* 伪中断不能发 EOI，见 pic.h */
+            tel_spurious(irq);
+            return;
+        }
+        tel_irq(irq);
+        if (irq == 0) {
+            pit_tick();
+            tel_timer_tick();               /* 到 100 毫秒了就给所有计数器拍一次快照 */
+        }
         if (irq == 1) keyboard_irq();
         pic_send_eoi(irq);
     }
@@ -84,32 +109,54 @@ void isr_handler(struct registers *regs) {
 void kmain(void) {
     /* 启动日志只走串口：屏幕留给用户，不打一堆调试信息 */
     serial_init();
-    serial_write_string("zeroOS kernel v0.9: entered protected mode, kmain() started\n");
+    serial_write_string("zeroOS kernel v0.12: entered protected mode, kmain() started\n");
 
     idt_install();
-    serial_write_string("zeroOS kernel v0.9: IDT installed, CPU exceptions now caught\n");
+    serial_write_string("zeroOS kernel v0.12: IDT installed, CPU exceptions now caught\n");
 
     pic_remap(0x20, 0x28);   /* 把 IRQ0~15 挪到 32~47 号，避开和 CPU 异常撞车 */
     pic_mask_all();
     pit_init(100);
     pic_unmask_irq(0);
-    serial_write_string("zeroOS kernel v0.9: PIT at 100 Hz, IRQ0 enabled\n");
+    serial_write_string("zeroOS kernel v0.12: PIT at 100 Hz, IRQ0 enabled\n");
     keyboard_init();
     pic_unmask_irq(1);
-    serial_write_string("zeroOS kernel v0.9: PS/2 keyboard on IRQ1 enabled\n");
+    serial_write_string("zeroOS kernel v0.12: PS/2 keyboard on IRQ1 enabled\n");
 
     /* 内存：先有物理页分配，分页要从它那里拿页表；堆又要靠分页把页映射过去 */
+    cpu_init();
+    if (cpu_get_info()->float_enabled) {
+        serial_write_string("zeroOS kernel v0.12: FPU + SSE2 enabled\n");
+    } else {
+        serial_write_string("zeroOS kernel v0.12: no SSE2 on this CPU, floating point disabled\n");
+    }
+    time_init();   /* 必须在开中断之前：校准要独占 50 毫秒 */
+    serial_write_string(time_tsc_khz() ? "zeroOS kernel v0.12: clock source: TSC\n"
+                                       : "zeroOS kernel v0.12: clock source: timer interrupts (no TSC)\n");
+
     pmm_init();
-    serial_write_string("zeroOS kernel v0.9: physical memory manager ready\n");
+    serial_write_string("zeroOS kernel v0.12: physical memory manager ready\n");
     paging_init();
-    serial_write_string("zeroOS kernel v0.9: paging enabled, page 0 unmapped\n");
+    serial_write_string("zeroOS kernel v0.12: paging enabled, page 0 unmapped\n");
     heap_init();
-    serial_write_string("zeroOS kernel v0.9: kernel heap ready at 0xD0000000\n");
+    serial_write_string("zeroOS kernel v0.12: kernel heap ready at 0xD0000000\n");
+    tel_init();   /* 开中断之前：第一次采样定在 100 毫秒之后 */
+    serial_write_string("zeroOS kernel v0.12: telemetry sampling every 100 ms\n");
 
     __asm__ __volatile__("sti");
 
+    {   /* 硬盘：放在开中断之后，等待超时要靠时钟 */
+        int n = ata_init();
+        serial_write_string(n ? "zeroOS kernel v0.12: ATA disks found: " : "zeroOS kernel v0.12: no ATA disks\n");
+        if (n) {
+            serial_write_char((char) ('0' + n));
+            serial_write_char('\n');
+        }
+    }
+
     vga_clear();
-    serial_write_string("zeroOS kernel v0.9: shell ready on screen and COM1\n");
+    serial_write_string("zeroOS kernel v0.12: shell ready on screen and COM1\n");
+    tel_event(EV_BOOT, 0);
 
     /* 想验证异常处理确实生效，可以临时取消下面这行注释，触发一次除零异常：
        屏幕和串口都会打印 "Division By Zero" 然后安全停机，而不是让 QEMU 窗口静默重启
@@ -117,7 +164,7 @@ void kmain(void) {
     */
 
     console_set_color(VGA_WHITE);
-    console_write("zeroOS v0.9\n");
+    console_write("zeroOS v0.12\n");
     console_set_color(VGA_LIGHT_GREY);
     console_write("Type 'help' for a list of commands.\n\n");
 

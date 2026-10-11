@@ -3,6 +3,9 @@
 #include "paging.h"
 #include "heap.h"
 #include "console.h"
+#include "telemetry.h"
+#include "demand.h"
+#include "time.h"
 
 static int passed, failed;
 
@@ -102,6 +105,7 @@ static void test_heap(void) {
     static unsigned int size[NBLOCKS];
     struct heap_stats st, before;
     unsigned char *big;
+    unsigned int pages_before;
     int i, ok;
 
     heap_get_stats(&before);
@@ -140,6 +144,7 @@ static void test_heap(void) {
     check(st.used == before.used && st.blocks == before.blocks,
           "heap: everything freed and merged back together");
 
+    pages_before = pmm_free_pages();
     big = kmalloc(100 * 1024);
     ok = big != 0;
     if (ok) {
@@ -149,6 +154,10 @@ static void test_heap(void) {
     heap_get_stats(&st);
     check(ok && st.mapped >= 100 * 1024, "heap: 100 KB block (heap grows by mapping new pages)");
     kfree(big);
+    heap_get_stats(&st);
+    /* 释放后多出 HEAP_KEEP 的部分要还回去：堆缩回 100KB 以下，物理页最多少 HEAP_KEEP 那么多 */
+    check(st.mapped < 100 * 1024 && pmm_free_pages() + HEAP_KEEP / PAGE_SIZE + 1 >= pages_before,
+          "heap: freed pages go back to the page allocator");
 
     /* 两块空闲块合并后，被吞掉的块头会作废，所以这里报的可能是 "invalid pointer" */
     console_write("  (a heap warning is expected next)\n");
@@ -157,11 +166,49 @@ static void test_heap(void) {
     check(st.used == before.used, "heap: double free detected, heap unchanged");
 }
 
+/* ---------------- 感知层 + 按需分页（v0.12） ---------------- */
+static void test_telemetry(void) {
+    struct tel_sample s;
+    struct heap_stats st;
+    volatile unsigned int *p = (volatile unsigned int *) DEMAND_START;
+    volatile unsigned int *q = (volatile unsigned int *) (DEMAND_START + 5 * PAGE_SIZE);
+    unsigned int faults, free_before, seq0, t0, ok;
+
+    /* 堆计数器是 kmalloc / kfree 时增量维护的；和"把整个堆走一遍"的结果必须一致 */
+    tel_read_now(&s);
+    heap_get_stats(&st);
+    check(s.v[TEL_HEAP_USED] == st.used, "telemetry: heap counter matches a full heap walk");
+
+    /* 按需分页：碰两个没映射的页 → 两次缺页被处理掉、内核不停机，拿到的是清零的页 */
+    faults = s.v[TEL_DEMAND_FAULTS];
+    free_before = pmm_free_pages();
+    ok = p[0] == 0 && p[1023] == 0;
+    p[0] = 0xDEADBEEF;
+    q[7] = 0x12345678;
+    ok = ok && p[0] == 0xDEADBEEF && q[7] == 0x12345678;
+    tel_read_now(&s);
+    check(ok && s.v[TEL_DEMAND_FAULTS] == faults + 2 && demand_pages() == 2,
+          "demand: 2 untouched pages mapped on first access (2 faults, no halt)");
+
+    /* 释放：页全部还回去（第一次用这段地址时会多建一张页表，留着下次用） */
+    demand_release();
+    check(demand_pages() == 0 && pmm_free_pages() <= free_before && pmm_free_pages() + 1 >= free_before,
+          "demand: release unmaps the pages and returns them");
+
+    /* 采样在时钟中断里做：主循环忙着跑 memtest 的时候也照样采 */
+    seq0 = tel_latest_seq();
+    t0 = time_ms();
+    while (time_ms() - t0 < 350) { }
+    check(tel_latest_seq() - seq0 >= 3 && tel_latest_seq() - seq0 <= 4,
+          "telemetry: sampling continues every 100 ms while the main loop is busy");
+}
+
 int memtest_run(void) {
     passed = failed = 0;
     test_pmm();
     test_paging();
     test_heap();
+    test_telemetry();
     if (failed == 0) console_set_color(VGA_LIGHT_GREEN);
     else console_set_color(VGA_LIGHT_RED);
     console_write("memtest: ");

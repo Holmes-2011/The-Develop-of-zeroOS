@@ -1,5 +1,6 @@
 #include "keyboard.h"
 #include "io.h"
+#include "telemetry.h"
 
 #define KBD_DATA   0x60   /* 读：扫描码 */
 #define KBD_STATUS 0x64   /* 读：状态，第 0 位 = 输出缓冲区里有数据 */
@@ -47,9 +48,13 @@ void keyboard_init(void) {
 
 static void buf_put(char c) {
     unsigned int next = (head + 1) % BUF_SIZE;
-    if (next == tail) return;   /* 满了就丢掉新字符，不覆盖还没读的 */
+    if (next == tail) {         /* 满了就丢掉新字符，不覆盖还没读的 */
+        tel_kbd_drop();
+        return;
+    }
     buf[head] = c;
     head = next;
+    tel_kbd_char();
 }
 
 void keyboard_irq(void) {

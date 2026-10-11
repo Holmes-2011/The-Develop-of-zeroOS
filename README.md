@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.11**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.12**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -12,9 +12,9 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 # 技术文档 —— x86 引导层 + 最小内核
 
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
-带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数，以及 ATA 硬盘驱动。
+带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数、ATA 硬盘驱动，以及感知层（计数器、采样、事件日志）。
 
-**当前版本：v0.11（硬盘驱动：ATA PIO）**
+**当前版本：v0.12（感知层：计数器 + 采样 + 事件日志 + 按需分页）**
 
 长期方向：把项目自己训练的模型和 Agent 整个放进 zeroOS 本机运行。设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -35,6 +35,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.10 的浮点** | 本地新增：`cpu.c`（CPUID、开启 FPU/SSE2）、`kmath.c`（数学函数）、`kstring.c`、`mathtest` / `bench`；核心代码与浮点代码分开编译 |
 | **v0.10.1 的修正** | 本地修正：`time.c`（开机时间改用 TSC，满负荷时不再变慢）、堆释放时归还末尾多余的页 |
 | **v0.11 的硬盘驱动** | 本地新增：`blockdev.c`（块设备接口）、`ata.c`（ATA PIO，支持 LBA48）、`disks` / `diskread` / `diskcheck` / `diskbench`、`gen_testdisk.py` |
+| **v0.12 的感知层** | 本地新增：`telemetry.c`（计数器、100 毫秒采样、事件日志）、`demand.c`（按需分页区）、`metrics` / `events` / `telstream` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
@@ -51,10 +52,10 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.11-disk/         ← 当前版本，要编译就进这个目录
+└── v0.12-telemetry/    ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.11-disk/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.12-telemetry/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> LBA 读盘 -> 要 E820 内存地图 -> 开 A20 -> 保护模式 -> 把内核复制到 1MB
@@ -73,6 +74,9 @@ pmm.c / .h      物理页分配：按 E820 地图，用位图管理每一页 4KB
 paging.c / .h   分页：恒等映射可用内存，第 0 页不映射（抓空指针）
 heap.c / .h     内核堆 kmalloc / kfree（0xD0000000 起，按需映射）
 memtest.c / .h  内存自检（memtest 命令）
+telemetry.c / .h 感知层：各子系统的计数器、每 100 毫秒采样一次、事件日志（v0.12）
+demand.c / .h   按需分页区：第一次访问时才分配物理页，缺页不再停机（v0.12）
+telcmd.c / .h   metrics / events / telstream 命令（v0.12）
 boot_info.h     引导扇区留给内核的信息（E820 地图的位置）
 cpu.c / .h      CPUID；支持的话开启 FPU + SSE2
 time.c / .h     开机时间：用 TSC 计时（开机时校准），没有 TSC 时数时钟中断
@@ -128,7 +132,7 @@ sudo apt-get install nasm clang lld qemu-system-x86
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.11-disk
+cd zeroOS/versions/v0.12-telemetry
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -137,7 +141,7 @@ make run    # 用 QEMU 启动它
 直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS v0.11
+zeroOS v0.12
 Type 'help' for a list of commands.
 
 zeroOS> _
@@ -152,7 +156,7 @@ zeroOS> _
 | `echo ...` | 原样打印后面的文字 |
 | `uptime` | 开机多久了（TSC 计时），并列出时钟中断次数 |
 | `mem` | BIOS 内存地图、空闲页数、分页和堆的状态 |
-| `memtest` | 内存自检：物理页、分页、堆共 17 项 |
+| `memtest` | 自检：物理页、分页、堆、按需分页、采样共 22 项 |
 | `cpu` | 处理器型号和特性，浮点是否开启 |
 | `mathtest` | 浮点自检：数学函数精度、特殊值、中断不破坏 XMM 寄存器，共 12 项 |
 | `bench` | 实测矩阵运算速度，估算 1B / 3B 模型每个词要多久 |
@@ -160,23 +164,27 @@ zeroOS> _
 | `diskread <盘> <扇区>` | 显示一个扇区开头的内容 |
 | `diskcheck <盘> <起始> <数量>` | 校验测试硬盘上的图案 |
 | `diskbench <盘> <MB>` | 测读盘速度，估算读 1 / 1.5 / 3 GB 要多久 |
+| `metrics` | 感知层：各计数器的累计值、最近 1 秒的速率、CPU 忙碌比例 |
+| `events` | 最近的重要事件（溢出、非法释放、按需缺页……） |
+| `telstream on\|off` | 每 100 毫秒往串口输出一行采样（采集数据用） |
 | `version` | 内核版本 |
 
 屏幕上的所有内容也会同步写到串口，`make run` 的终端里能看到一模一样的一份。
-终端里还会先打出**十一行**启动日志：
+终端里还会先打出**十二行**启动日志：
 
 ```
-zeroOS kernel v0.11: entered protected mode, kmain() started
-zeroOS kernel v0.11: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.11: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.11: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.11: FPU + SSE2 enabled
-zeroOS kernel v0.11: clock source: TSC
-zeroOS kernel v0.11: physical memory manager ready
-zeroOS kernel v0.11: paging enabled, page 0 unmapped
-zeroOS kernel v0.11: kernel heap ready at 0xD0000000
-zeroOS kernel v0.11: ATA disks found: 1
-zeroOS kernel v0.11: shell ready on screen and COM1
+zeroOS kernel v0.12: entered protected mode, kmain() started
+zeroOS kernel v0.12: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.12: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.12: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.12: FPU + SSE2 enabled
+zeroOS kernel v0.12: clock source: TSC
+zeroOS kernel v0.12: physical memory manager ready
+zeroOS kernel v0.12: paging enabled, page 0 unmapped
+zeroOS kernel v0.12: kernel heap ready at 0xD0000000
+zeroOS kernel v0.12: telemetry sampling every 100 ms
+zeroOS kernel v0.12: ATA disks found: 1
+zeroOS kernel v0.12: shell ready on screen and COM1
 ```
 
 判断方法：
@@ -251,8 +259,10 @@ system halted.
 - **v0.10** — 开启 FPU / SSE2，数学函数，`cpu` / `mathtest` / `bench`；核心代码与浮点代码分开编译；
   核心代码按 486 生成指令（修正：v0.6 ~ v0.9 实际要求 Pentium Pro 以上）
 - **v0.10.1** — 开机时间改用 TSC（满负荷时数中断会丢，实测最多慢 19%）；堆释放时归还末尾多余的页
-- **v0.11（当前）** — 块设备接口 + ATA PIO 硬盘驱动（支持 LBA48），只读；`disks` / `diskread` / `diskcheck` / `diskbench`；
+- **v0.11** — 块设备接口 + ATA PIO 硬盘驱动（支持 LBA48），只读；`disks` / `diskread` / `diskcheck` / `diskbench`；
   QEMU 里读盘约 7–8 MB/s。AHCI / NVMe 以后加
+- **v0.12（当前）** — 感知层：中断、键盘、堆、物理页、缺页、CPU 空闲时间等 18 个计数器，时钟中断里每 100 毫秒采样一次，
+  事件日志；按需分页区（缺页现场补页、不再停机）；`metrics` / `events` / `telstream`
 
 ## 版本档案：`versions/`
 
@@ -275,7 +285,8 @@ versions/
 ├── v0.9-memory/              ← v0.9 快照
 ├── v0.10-float/              ← v0.10 快照
 ├── v0.10.1/                  ← v0.10.1 快照
-├── v0.11-disk/               ← 当前版本
+├── v0.11-disk/               ← v0.11 快照
+├── v0.12-telemetry/          ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 

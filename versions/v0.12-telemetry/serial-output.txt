@@ -1,0 +1,201 @@
+zeroOS kernel v0.12: entered protected mode, kmain() started
+zeroOS kernel v0.12: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.12: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.12: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.12: FPU + SSE2 enabled
+zeroOS kernel v0.12: clock source: TSC
+zeroOS kernel v0.12: physical memory manager ready
+zeroOS kernel v0.12: paging enabled, page 0 unmapped
+zeroOS kernel v0.12: kernel heap ready at 0xD0000000
+zeroOS kernel v0.12: telemetry sampling every 100 ms
+zeroOS kernel v0.12: ATA disks found: 2
+zeroOS kernel v0.12: shell ready on screen and COM1
+zeroOS v0.12
+Type 'help' for a list of commands.
+
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  metrics   counters, rates and CPU load (last 1 s)
+  events    recent notable events
+  telstream telstream on|off: one sample per line on COM1
+  version   kernel version
+zeroOS> uptime
+uptime: 0.70 s (clock: tsc; 66 timer interrupts)
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7870 free / 7881 usable (31480 KB free)
+kernel: 0x00100000 - 0x00115A30, page bitmap up to 0x00117000
+paging: on, identity-mapped up to 0x01FE0000, 9 page tables
+heap:   0xD0000000, 4 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> memtest
+  [ok]   pmm: 64 pages are aligned, distinct, above the kernel
+  [ok]   pmm: free count dropped by 64
+  [ok]   pmm: 256 KB written and read back intact
+  [ok]   pmm: all pages returned
+  (a 'double free' warning is expected next)
+pmm: double free of page 0x00122000
+  [ok]   pmm: double free detected, count unchanged
+  [ok]   paging: page 0 is unmapped (null pointers fault)
+  [ok]   paging: VGA memory is identity-mapped
+  [ok]   paging: map 0xE0000000 to a fresh page
+  [ok]   paging: write via virtual address, read via physical
+  [ok]   paging: unmap
+  [ok]   heap: kmalloc(0) returns null
+  [ok]   heap: 40 blocks of 1..500 bytes, 8-byte aligned
+  [ok]   heap: no two blocks overlap
+  [ok]   heap: free half, reallocate, all contents intact
+  [ok]   heap: everything freed and merged back together
+  [ok]   heap: 100 KB block (heap grows by mapping new pages)
+  [ok]   heap: freed pages go back to the page allocator
+  (a heap warning is expected next)
+heap: double free of 0xD0000010
+  [ok]   heap: double free detected, heap unchanged
+  [ok]   telemetry: heap counter matches a full heap walk
+  [ok]   demand: 2 untouched pages mapped on first access (2 faults, no halt)
+  [ok]   demand: release unmaps the pages and returns them
+  [ok]   telemetry: sampling continues every 100 ms while the main loop is busy
+memtest: 22/22 passed
+zeroOS> cpu
+vendor: GenuineIntel
+model:  QEMU Virtual CPU version 2.5+
+features: fpu fxsr sse sse2 sse3 tsc
+floating point: enabled (x87 + SSE2)
+clock: TSC at 1000 MHz
+zeroOS> mathtest
+  [ok]   basic float arithmetic
+  [ok]   1/0 = +inf (no exception)
+  [ok]   0/0 = nan (no exception)
+  [ok]   sqrtf: 12 points, max error 0.19 eps (limit 1)
+  [ok]   expf : 82 points, max error 0.56 eps (limit 4)
+  [ok]   logf : 23 points, max error 0.47 eps (limit 4)
+  [ok]   sinf : 45 points, max error 0.34 eps (limit 4)
+  [ok]   cosf : 45 points, max error 0.25 eps (limit 4)
+  [ok]   tanhf: 44 points, max error 0.30 eps (limit 4)
+  powf : max error 2.89 eps
+  [ok]   powf within 32 eps (RoPE frequencies)
+  [ok]   special values (exp/log/sqrt)
+  [ok]   xmm0-7 survive 30 timer interrupts
+mathtest: 12/12 passed
+zeroOS> bench
+matrix x vector, 1024 x 1024, about 1 second each...
+  f32: 125.0 M multiply-adds/s
+  q8 : 86.3 M multiply-adds/s
+  q4 : 69.9 M multiply-adds/s
+estimated time per generated token (matrix work only):
+    8-bit: 1B model ~11.6 s/token, 3B model ~34.7 s/token
+    4-bit: 1B model ~14.3 s/token, 3B model ~42.9 s/token
+note: single core; under QEMU on a non-x86 Mac every x86 instruction is
+      emulated in software, so real x86 hardware is many times faster.
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7851 free / 7881 usable (31404 KB free)
+kernel: 0x00100000 - 0x00115A30, page bitmap up to 0x00117000
+paging: on, identity-mapped up to 0x01FE0000, 12 page tables
+heap:   0xD0000000, 68 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> disks
+ata0: 512 KB, LBA48, "QEMU HARDDISK"
+ata1: 143 GB, LBA48, "QEMU HARDDISK"
+zeroOS> diskread ata0 0
+FA 31 C0 8E D8 8E C0 8E D0 BC 00 7C FB 88 16 CF  .1.........|....
+7C BD 80 00 89 E8 83 F8 40 76 03 B8 40 00 A3 EB  |.......@v..@...
+7C C6 06 D0 7C 03 BE E9 7C 8A 16 CF 7C B4 42 CD  |...|...|...|.B.
+13 73 0F 30 E4 CD 13 FE 0E D0 7C 75 E9 BE D1 7C  .s.0......|u...|
+... last 2 bytes: 55 AA (boot signature)
+zeroOS> diskcheck ata1 0 16384
+diskcheck: 16384 sectors, 0 bad
+zeroOS> diskcheck ata1 268435455 2
+diskcheck: 2 sectors, 0 bad
+zeroOS> diskcheck ata1 300000000 1
+diskcheck: 1 sectors, 0 bad
+zeroOS> diskbench ata1 8
+diskbench: read 8 MB in 412 ms = 19883 KB/s
+  loading 1 GB would take about 52 s, 1.5 GB about 79 s, 3 GB about 158 s
+zeroOS> metrics
+metrics (last 0.9 s; 127 samples since boot, every 100 ms):
+  irq      timer 1268 (100/s), keyboard 338 (28/s), other 0, spurious 0
+  keyboard chars 169, dropped 0
+  heap     used 0 B, mapped 68 KB
+  heap     allocs 71 (1/s), frees 71 (1/s), failed 0, bad frees 1
+  pages    free 7851, allocs 2495 (241/s), frees 2465 (241/s), bad frees 1
+  demand   faults 2 (0/s), mapped 0 pages
+  cpu      busy 42%
+zeroOS> events
+events: 4 since boot (showing last 4)
+       0.055 s  boot
+       1.319 s  page bad free (0x00122000)
+       1.344 s  heap bad free (0xD0000010)
+       1.346 s  demand fault x2 (0xC000501C)
+zeroOS> telstream on
+TH,seq,t_ms,irq_timer,irq_keyboard,irq_other,irq_spurious,kbd_chars,kbd_drops,heap_allocs,heap_frees,heap_fails,heap_bad_frees,heap_used,heap_mapped,pages_free,page_allocs,page_frees,page_bad_frees,demand_faults,idle_us
+telemetry stream on: one line per sample on COM1 (serial only)
+zeroOS> T,138,13959,1388,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9008314
+T,139,14059,1398,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9103641
+T,140,14159,1408,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9201727
+T,141,14259,1418,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9298958
+T,142,14358,1428,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9396694
+T,143,14459,1438,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9496663
+T,144,14558,1448,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9594084
+T,145,14658,1458,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9691683
+T,146,14759,1468,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9790371
+T,147,14858,1478,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9887043
+T,148,14958,1488,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,9985750
+T,149,15059,1498,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10085350
+T,150,15159,1508,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10183500
+T,151,15259,1518,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10280433
+T,152,15359,1528,382,0,0,191,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10379067
+teT,153,15459,1538,386,0,0,193,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10476493
+lstT,154,15558,1548,391,0,0,196,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10572457
+reT,155,15659,1558,396,0,0,198,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10672422
+amT,156,15759,1568,400,0,0,200,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10770182
+ ofT,157,15858,1578,405,0,0,203,0,71,71,0,1,0,69632,7851,2495,2465,1,2,10866522
+f
+telemetry stream off
+zeroOS> echo Hi, zerx oOS!
+Hi, zeroOS!
+zeroOS> foo
+unknown command: foo (type 'help')
+zeroOS>   
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  metrics   counters, rates and CPU load (last 1 s)
+  events    recent notable events
+  telstream telstream on|off: one sample per line on COM1
+  version   kernel version
+zeroOS> clear
+zeroOS> 

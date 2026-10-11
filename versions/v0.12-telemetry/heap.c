@@ -2,6 +2,7 @@
 #include "paging.h"
 #include "pmm.h"
 #include "console.h"
+#include "telemetry.h"
 
 #define MAGIC_USED 0x5A0A110C   /* "zeroOS alloc" */
 #define MAGIC_FREE 0x5A0AF4EE   /* "zeroOS free"  */
@@ -15,6 +16,7 @@ struct block {
 };
 
 static struct block *first;
+static void shrink(void);   /* 定义在 kfree 后面 */
 static unsigned int heap_end;  /* 已映射部分的末尾 */
 
 #define HDR ((unsigned int) sizeof(struct block))
@@ -73,7 +75,10 @@ static void merge_next(struct block *b) {
 
 void *kmalloc(unsigned int size) {
     struct block *b, *last = 0;
-    if (size == 0 || size > HEAP_LIMIT - HEAP_START) return 0;
+    if (size == 0 || size > HEAP_LIMIT - HEAP_START) {
+        if (size) tel_heap_fail(size);
+        return 0;
+    }
     size = (size + 7) & ~7U;
 
     /* 首次适配：从头找第一块够大的空闲块 */
@@ -81,18 +86,19 @@ void *kmalloc(unsigned int size) {
         if (b->magic == MAGIC_FREE && b->size >= size) {
             split(b, size);
             b->magic = MAGIC_USED;
+            tel_heap_alloc(b->size);
             return DATA(b);
         }
         last = b;
     }
 
     /* 没有够大的：把堆往后长 */
-    if (!last) return 0;   /* heap_init 失败过 */
+    if (!last) { tel_heap_fail(size); return 0; }   /* heap_init 失败过 */
     {
         unsigned int old_end = heap_end;
         unsigned int need = size + HDR;
         if (last->magic == MAGIC_FREE) need -= last->size + HDR;   /* 最后一块空闲：只需补差额 */
-        if (grow(need) != 0) return 0;
+        if (grow(need) != 0) { tel_heap_fail(size); return 0; }
         if (last->magic == MAGIC_FREE) {
             last->size += heap_end - old_end;   /* 新页直接并进最后那块 */
             b = last;
@@ -106,6 +112,7 @@ void *kmalloc(unsigned int size) {
         }
         split(b, size);
         b->magic = MAGIC_USED;
+        tel_heap_alloc(b->size);
         return DATA(b);
     }
 }
@@ -124,13 +131,39 @@ void kfree(void *ptr) {
         console_write_hex((unsigned int) ptr);
         console_set_color(VGA_LIGHT_GREY);
         console_putc('\n');
+        tel_heap_bad_free((unsigned int) ptr);
         return;
     }
+    tel_heap_free(b->size);
     b->magic = MAGIC_FREE;
     /* 和前后相邻的空闲块合并，避免堆被切成一堆小碎片 */
     if (b->next && b->next->magic == MAGIC_FREE) merge_next(b);
     if (b->prev && b->prev->magic == MAGIC_FREE) merge_next(b->prev);
+    shrink();
 }
+
+/* 堆末尾的空闲块太大时，把多出 HEAP_KEEP 的页解除映射、还给物理页分配器。
+   v0.10 以前堆只长不缩：跑一次 bench（申请约 6MB）之后，这 6MB 就一直被堆占着 */
+static void shrink(void) {
+    struct block *last = first;
+    unsigned int keep_end, v;
+    while (last->next) last = last->next;
+    if (last->magic != MAGIC_FREE) return;
+
+    /* 至少留住最后这块的块头 + 一点数据区（页对齐），再加 HEAP_KEEP 的余量 */
+    keep_end = (((unsigned int) DATA(last) + MIN_SPLIT + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1)) + HEAP_KEEP;
+    if (keep_end >= heap_end) return;
+
+    for (v = keep_end; v < heap_end; v += PAGE_SIZE) {
+        unsigned int phys = paging_translate(v);
+        paging_unmap(v);
+        if (phys != 0xFFFFFFFF) pmm_free_page(phys);
+    }
+    last->size = keep_end - (unsigned int) DATA(last);
+    heap_end = keep_end;
+}
+
+unsigned int heap_mapped_bytes(void) { return heap_end - HEAP_START; }
 
 void heap_get_stats(struct heap_stats *st) {
     struct block *b;

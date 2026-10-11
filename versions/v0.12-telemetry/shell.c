@@ -7,6 +7,12 @@
 #include "paging.h"
 #include "heap.h"
 #include "memtest.h"
+#include "cpu.h"
+#include "floattest.h"
+#include "time.h"
+#include "disktest.h"
+#include "telemetry.h"
+#include "telcmd.h"
 
 #define LINE_MAX 71   /* 一行 80 列 = 提示符 "zeroOS> " 8 列 + 输入 71 列 + 光标 1 列，长命令不会折行 */
 
@@ -32,20 +38,23 @@ static void cmd_echo(const char *args) {
 
 static void cmd_version(const char *args) {
     (void) args;
-    console_write("zeroOS kernel v0.9 (x86, 32-bit protected mode, paging)\n");
+    console_write("zeroOS kernel v0.12 (x86, 32-bit protected mode, paging, SSE2, ATA PIO, telemetry)\n");
 }
 
 static void cmd_uptime(const char *args) {
-    unsigned int t = pit_ticks();   /* PIT 100 Hz：1 tick = 10 毫秒 */
+    unsigned int ms = time_ms();
     (void) args;
     console_write("uptime: ");
-    console_write_dec(t / 100);
+    console_write_dec(ms / 1000);
     console_putc('.');
-    console_putc((char) ('0' + (t % 100) / 10));
-    console_putc((char) ('0' + t % 10));
-    console_write(" s (");
-    console_write_dec(t);
-    console_write(" ticks)\n");
+    console_putc((char) ('0' + (ms % 1000) / 100));
+    console_putc((char) ('0' + (ms % 100) / 10));
+    console_write(" s (clock: ");
+    console_write(time_source());
+    /* 也列出时钟中断的次数：满负荷时它会比实际时间少（丢中断），可以和上面的时间对比 */
+    console_write("; ");
+    console_write_dec(pit_ticks());
+    console_write(" timer interrupts)\n");
 }
 
 static const char *e820_type_name(unsigned int type) {
@@ -127,6 +136,42 @@ static void cmd_memtest(const char *args) {
     memtest_run();
 }
 
+static void cmd_cpu(const char *args) {
+    const struct cpu_info *c = cpu_get_info();
+    (void) args;
+    console_write("vendor: ");
+    console_write(c->vendor);
+    console_write("\nmodel:  ");
+    console_write(c->brand[0] ? c->brand : "(not reported)");
+    console_write("\nfeatures:");
+    if (c->has_fpu)  console_write(" fpu");
+    if (c->has_fxsr) console_write(" fxsr");
+    if (c->has_sse)  console_write(" sse");
+    if (c->has_sse2) console_write(" sse2");
+    if (c->has_sse3) console_write(" sse3");
+    if (c->has_tsc)  console_write(c->invariant_tsc ? " tsc(invariant)" : " tsc");
+    console_write(c->float_enabled ? "\nfloating point: enabled (x87 + SSE2)\n"
+                                   : "\nfloating point: disabled (needs fpu, fxsr, sse, sse2)\n");
+    console_write("clock: ");
+    if (time_tsc_khz()) {
+        console_write("TSC at ");
+        console_write_dec(time_tsc_khz() / 1000);
+        console_write(" MHz\n");
+    } else {
+        console_write("counting timer interrupts (no TSC)\n");
+    }
+}
+
+static void cmd_mathtest(const char *args) {
+    (void) args;
+    mathtest_run();
+}
+
+static void cmd_bench(const char *args) {
+    (void) args;
+    bench_run();
+}
+
 static const struct shell_command commands[] = {
     { "help",    "list commands",                    cmd_help },
     { "clear",   "clear the screen",                 cmd_clear },
@@ -134,6 +179,16 @@ static const struct shell_command commands[] = {
     { "uptime",  "time since boot",                  cmd_uptime },
     { "mem",     "memory map, free pages, heap",     cmd_mem },
     { "memtest", "self-test pages, paging and heap", cmd_memtest },
+    { "cpu",     "processor model and features",     cmd_cpu },
+    { "mathtest","self-test floating point and math",cmd_mathtest },
+    { "bench",   "measure matrix speed, estimate LLM speed", cmd_bench },
+    { "disks",   "list disks",                       cmd_disks },
+    { "diskread","diskread <disk> <sector>: show a sector", cmd_diskread },
+    { "diskcheck","diskcheck <disk> <first> <count>: verify test pattern", cmd_diskcheck },
+    { "diskbench","diskbench <disk> <MB>: measure read speed", cmd_diskbench },
+    { "metrics", "counters, rates and CPU load (last 1 s)", cmd_metrics },
+    { "events",  "recent notable events",            cmd_events },
+    { "telstream","telstream on|off: one sample per line on COM1", cmd_telstream },
     { "version", "kernel version",                   cmd_version },
 };
 #define NUM_COMMANDS ((int) (sizeof(commands) / sizeof(commands[0])))
@@ -199,16 +254,21 @@ static void prompt(void) {
 /* 等下一个字符。关中断后再检查缓冲区：如果检查完、hlt 之前恰好来了中断，
    CPU 就会带着"已经有字符"的状态睡下去，要等下一次中断才醒。
    "sti; hlt" 连在一起没有这个问题：sti 之后的那一条指令执行完才会响应中断 */
+/* v0.12：每次醒来先处理感知层的新采样（主循环上下文，以后可以在这里跑浮点的系统直觉模块）；
+   hlt 前后记 CPU 空闲时间 */
 static int wait_char(void) {
     while (1) {
         int c;
+        tel_poll();
         __asm__ __volatile__("cli");
         c = keyboard_getchar();
         if (c >= 0) {
             __asm__ __volatile__("sti");
             return c;
         }
+        tel_idle_begin();
         __asm__ __volatile__("sti; hlt");
+        tel_idle_end();
     }
 }
 
