@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.5.1**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.6**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -12,9 +12,9 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 # 技术文档 —— x86 引导层 + 最小内核
 
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
-带串口调试输出、IDT 异常处理、PIC 重映射。
+带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断。
 
-**当前版本：v0.5.1**
+**当前版本：v0.6（PIT 定时器）**
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -25,6 +25,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 |---|---|
 | **v0.1 ~ v0.5 的上游源码** | 由 **Claude Chat** 编写。原始压缩包完整保存在 `versions/v0.3-idt/upstream-source.zip` 和 `versions/v0.5-pic/upstream-source.zip`，未做改动 |
 | **v0.5.1 的修正** | 本地修正（共 5 项，详见下方"版本记录"）：17/21/29/30 号异常的错误码分类、引导层补 `cli`、镜像补零兼容 AHCI、macOS 原生构建、测试脚本跨平台 |
+| **v0.6 的 PIT 定时器** | 本地新增：`pit.c`/`pit.h`（通道 0，100 Hz）、IRQ0 计数、`elf_to_bin.py` 替代会卡住的 `zig objcopy` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
@@ -40,10 +41,10 @@ LICENSE                  Apache-2.0
 release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.5.1/              ← 当前版本，要编译就进这个目录
+└── v0.6-pit/            ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.5.1/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.6-pit/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> 用磁盘中断加载内核 -> 开 A20 -> 切到 32 位保护模式
@@ -52,6 +53,8 @@ kernel.c        内核主体：串口调试输出 + 清屏 + 中断/异常分发
 idt.c / idt.h   中断描述符表（IDT），256 项，注册 0~47 号门
 isr.asm         0~31 号异常 + 0~15 号 IRQ 的入口桩，以及 idt_flush（lidt 指令）
 pic.c / pic.h   8259 PIC 重映射：硬件中断号从 0~15 挪到 32~47，避开 CPU 异常号
+pit.c / pit.h   8253/8254 PIT 定时器：通道 0 设成 100 Hz，每次 IRQ0 让 tick 加一
+elf_to_bin.py   把 kernel.elf 转成纯二进制（替代会卡住的 zig objcopy）
 io.h            端口读写公共函数（inb / outb）
 link.ld         告诉链接器内核要被放在内存的哪个地址（0x1000）
 Makefile        拼出可启动镜像 build/os-image.bin
@@ -88,7 +91,7 @@ macOS 自带的是 clang 而不是 GNU gcc，而且 Apple 的 `ld` 只能生成 
 ## 编译 + 运行
 
 ```bash
-cd ~/Desktop/ZERO/zeroOS/versions/v0.5.1
+cd ~/Desktop/ZERO/zeroOS/versions/v0.6-pit
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -97,13 +100,16 @@ make run    # 用 QEMU 启动它
 这是故意的：直接开机，不做开机动画/logo 这些"杂七杂八"的东西。
 
 想确认内核是不是真的跑起来了、而不是卡死在某一步，看终端里的串口输出就行——
-`make run` 已经加了 `-serial stdio`，正常情况下终端会打印**四行**：
+`make run` 已经加了 `-serial stdio`，正常情况下终端会先打印**四行**，然后**每秒一行** `timer tick`：
 
 ```
 zeroOS kernel v0.5: entered protected mode, kmain() started
 zeroOS kernel v0.5: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.5: PIC remapped to 32-47, all IRQs masked
+zeroOS kernel v0.6: PIT at 100 Hz, IRQ0 enabled
 zeroOS kernel v0.5: screen cleared, entering halt loop
+zeroOS timer tick
+zeroOS timer tick
+...
 ```
 
 判断方法：
@@ -148,9 +154,12 @@ zeroOS kernel: CPU exception -> Division By Zero
   ② `boot.asm` 去掉多余的 `sti`，整个实模式阶段保持中断关闭（**这一版没有收到源码**）
 - **v0.5** — 新增 PIC 重映射（`pic.c`/`pic.h`）+ IRQ0~15 入口，把硬件中断号挪到 32~47 避开 CPU 异常号；
   新增 `io.h`；附带上游自带的 `test-boot.sh`
-- **v0.5.1（当前）** — 本地修正版：修掉 17/21/29/30 号异常的错误码分类；
+- **v0.5.1** — 本地修正版：修掉 17/21/29/30 号异常的错误码分类；
   引导层补 `cli`；镜像补零到 512 KB 兼容 AHCI；Makefile 改成 macOS 原生；
   `test-boot.sh` 改成跨平台
+- **v0.6（当前）** — 新增 PIT 定时器（`pit.c`/`pit.h`）：通道 0 设成 100 Hz，解除 IRQ0 屏蔽并 `sti`，
+  每 100 个 tick 往串口打一行 `timer tick`；`elf_to_bin.py` 替代会卡住的 `zig objcopy`；
+  `test-boot.sh` 改成必须等到 tick 出现才算通过
 
 ## 版本档案：`versions/`
 
@@ -165,7 +174,8 @@ versions/
 ├── v0.3-idt/                     ← 含上游原始 zip（7 个文件）
 ├── v0.4-nosource/                ← 没收到源码，如实标注
 ├── v0.5-pic/                     ← 含上游原始 zip（9 个文件）
-├── v0.5.1/                   ← 当前版本快照 + isr.asm.diff
+├── v0.5.1/                   ← v0.5.1 快照 + isr.asm.diff
+├── v0.6-pit/                 ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 

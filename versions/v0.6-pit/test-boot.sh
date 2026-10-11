@@ -18,7 +18,8 @@ set -u
 
 IMAGE="${1:-build/os-image.bin}"
 LOG="boot-test.log"
-TIMEOUT=5   # 秒。正常情况下内核几乎瞬间就跑到 halt 循环了，5秒绰绰有余
+TIMEOUT=8   # 秒。v0.6 要等 PIT 跳够 MIN_TICKS 次（每秒一次），8 秒绰绰有余
+MIN_TICKS=3  # 至少看到几行 "timer tick" 才算时钟中断真的在跑
 
 CDEV="${CDEV:-$HOME/Documents/Harness WorkSpace/c-dev-apps}"
 LAUNCHER="$CDEV/toolchain/qemu-i386"
@@ -55,7 +56,7 @@ if command -v timeout >/dev/null 2>&1; then
         || true   # timeout 杀掉 qemu 会返回非0，这是预期行为，不算脚本失败
 else
     # macOS 没有 timeout，自己实现一份：跑起来后轮询串口日志，
-    # 拿到最后一行就提前结束，不用干等满超时
+    # 拿到足够的 tick 行就提前结束，不用干等满超时
     "$QEMU" "${EXTRA_ARGS[@]}" \
         -drive format=raw,file="$IMAGE" \
         -serial file:"$LOG" \
@@ -63,7 +64,7 @@ else
     QPID=$!
     n=0
     while [ "$n" -lt $((TIMEOUT * 10)) ]; do
-        grep -qF "entering halt loop" "$LOG" 2>/dev/null && break
+        [ "$(grep -cF "timer tick" "$LOG" 2>/dev/null)" -ge "$MIN_TICKS" ] 2>/dev/null && break
         sleep 0.1
         n=$((n + 1))
     done
@@ -80,8 +81,9 @@ echo "-------------------"
 EXPECTED_LINES=(
     "entered protected mode, kmain() started"
     "IDT installed, CPU exceptions now caught"
-    "PIC remapped to 32-47, all IRQs masked"
+    "PIT at 100 Hz, IRQ0 enabled"
     "screen cleared, entering halt loop"
+    "timer tick"
 )
 
 PASS=1

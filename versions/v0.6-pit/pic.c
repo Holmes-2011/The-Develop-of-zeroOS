@@ -43,3 +43,9 @@ void pic_mask_all(void) {
     outb(PIC1_DATA, 0xFF);
     outb(PIC2_DATA, 0xFF);
 }
+
+void pic_unmask_irq(unsigned char irq) {
+    unsigned char mask;
+    if (irq < 8) { mask = inb(PIC1_DATA); outb(PIC1_DATA, (unsigned char)(mask & (unsigned char)~(1U << irq))); }
+    else if (irq < 16) { mask = inb(PIC2_DATA); outb(PIC2_DATA, (unsigned char)(mask & (unsigned char)~(1U << (irq - 8)))); mask = inb(PIC1_DATA); outb(PIC1_DATA, (unsigned char)(mask & (unsigned char)~(1U << 2))); }
+}

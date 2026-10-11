@@ -1,0 +1,7 @@
+zeroOS kernel v0.5: entered protected mode, kmain() started
+zeroOS kernel v0.5: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.6: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.5: screen cleared, entering halt loop
+zeroOS timer tick
+zeroOS timer tick
+zeroOS timer tick
