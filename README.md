@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.13.1**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.13.2**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 
 ---
@@ -14,7 +14,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
 带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数、ATA 硬盘驱动，以及感知层（计数器、采样、事件日志）。
 
-**当前版本：v0.13.1（工具层：权限、确认框、审计）**
+**当前版本：v0.13.2（工具层 + 全量复审修正）**
 
 长期方向：把项目自己训练的模型和 Agent 整个放进 zeroOS 本机运行。设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -53,10 +53,10 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.13.1/            ← 当前版本，要编译就进这个目录
+└── v0.13.2/            ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.13.1/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.13.2/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> LBA 读盘 -> 要 E820 内存地图 -> 开 A20 -> 保护模式 -> 把内核复制到 1MB
@@ -82,6 +82,7 @@ tools.c / .h    工具层：工具登记、权限判定、开发者模式、审�
 confirm.c / .h  内核绘制的确认框：只认物理键盘的 y / n，弹框前清空键盘缓冲区（v0.13）
 builtin_tools.c 内置工具：查询、诊断（heap_check / pmm_check）、故障注入（v0.13）
 toolcmd.c / .h  tools / tool / devmode / audit 命令（v0.13）
+stack.c / .h    内核栈水位和溢出检测（v0.13.2）
 boot_info.h     引导扇区留给内核的信息（E820 地图的位置）
 cpu.c / .h      CPUID；支持的话开启 FPU + SSE2
 time.c / .h     开机时间：用 TSC 计时（开机时校准），没有 TSC 时数时钟中断
@@ -137,7 +138,7 @@ sudo apt-get install nasm clang lld qemu-system-x86
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.13.1
+cd zeroOS/versions/v0.13.2
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -146,7 +147,7 @@ make run    # 用 QEMU 启动它
 直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS v0.13.1
+zeroOS v0.13.2
 Type 'help' for a list of commands.
 
 zeroOS> _
@@ -183,19 +184,19 @@ zeroOS> _
 终端里还会先打出**十三行**启动日志：
 
 ```
-zeroOS kernel v0.13.1: entered protected mode, kmain() started
-zeroOS kernel v0.13.1: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.13.1: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.13.1: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.13.1: FPU + SSE2 enabled
-zeroOS kernel v0.13.1: clock source: TSC
-zeroOS kernel v0.13.1: physical memory manager ready
-zeroOS kernel v0.13.1: paging enabled, page 0 unmapped
-zeroOS kernel v0.13.1: kernel heap ready at 0xD0000000
-zeroOS kernel v0.13.1: telemetry sampling every 100 ms
-zeroOS kernel v0.13.1: tool layer ready, developer mode off
-zeroOS kernel v0.13.1: ATA disks found: 1
-zeroOS kernel v0.13.1: shell ready on screen and COM1
+zeroOS kernel v0.13.2: entered protected mode, kmain() started
+zeroOS kernel v0.13.2: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.13.2: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.13.2: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.13.2: FPU + SSE2 enabled
+zeroOS kernel v0.13.2: clock source: TSC
+zeroOS kernel v0.13.2: physical memory manager ready
+zeroOS kernel v0.13.2: paging enabled, page 0 unmapped
+zeroOS kernel v0.13.2: kernel heap ready at 0xD0000000
+zeroOS kernel v0.13.2: telemetry sampling every 100 ms
+zeroOS kernel v0.13.2: tool layer ready, developer mode off
+zeroOS kernel v0.13.2: ATA disks found: 1
+zeroOS kernel v0.13.2: shell ready on screen and COM1
 ```
 
 判断方法：
@@ -276,7 +277,9 @@ system halted.
   事件日志；按需分页区（缺页现场补页、不再停机）；`metrics` / `events` / `telstream`
 - **v0.13** — 工具层：11 个工具、4 级权限、内核绘制的确认框（只认物理键盘、丢弃提前敲好的键、20 秒超时）、
   开发者模式、审计日志；`heap_check` / `pmm_check` 诊断；`inject_fault` 故障注入。Agent 以后只能通过这一层做事
-- **v0.13.1（当前）** — 复审修正：`spin` 参数越界读、故障注入后 `memtest` 误报、确认框文字截断等 4 处（另 1 处复测后撤回）
+- **v0.13.1** — 复审修正：`spin` 参数越界读、故障注入后 `memtest` 误报、确认框文字截断等 4 处（另 1 处复测后撤回）
+- **v0.13.2（当前）** — 全量复审 + 8 组压力测试，修 14 处：堆扩张失败吞页、页表不回收、Ctrl 组合键漏字符、遥测流粘连、
+  引导扇区验证 A20、栈哨兵与水位（`stack_check`）等
 
 ## 版本档案：`versions/`
 
@@ -302,7 +305,8 @@ versions/
 ├── v0.11-disk/               ← v0.11 快照
 ├── v0.12-telemetry/          ← v0.12 快照
 ├── v0.13-tools/              ← v0.13 快照
-├── v0.13.1/                  ← 当前版本
+├── v0.13.1/                  ← v0.13.1 快照
+├── v0.13.2/                  ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 
