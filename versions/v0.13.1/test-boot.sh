@@ -202,6 +202,7 @@ feed_monitor() {
     confirm_and_answer "tool inject_fault demand_touch" y
     type_text "tool set_telstream on"                # 可撤销：直接执行；顺便用流里的采样核对下面的 spin
     confirm_and_answer "tool inject_fault spin 1200" y
+    confirm_and_answer "tool inject_fault spin" y         # 不带数字：行缓冲里还留着上一条的 " 1200"，v0.13 会偷用它跑 1200 毫秒并返回 ok
     type_text "tool set_telstream off"
     type_text "tool get_metrics"
     type_text "devmode off"
@@ -371,6 +372,8 @@ for a, b in zip(idle, idle[1:]):
 print(best)' "$LOG")
 check "set_telstream on/off 可撤销工具直接执行" "in_log 'set_telstream -> ok: telstream=on' && in_log 'set_telstream -> ok: telstream=off'"
 check "inject_fault spin 1200 期间遥测流看到 CPU 连续忙碌（${SPIN_BUSY:-?} 个采样）" '[ -n "$SPIN_BUSY" ] && [ "$SPIN_BUSY" -ge 8 ]'
+check "spin 不带数字 → bad_args，没有偷用行缓冲里残留的 1200" \
+      "[ \"\$(grep -c '^inject_fault -> bad_args' '$LOG')\" -ge 1 ] && [ \"\$(grep -c 'spun for 1200 ms' '$LOG')\" -eq 1 ]"
 check "get_metrics 格式正确" "grep -qE '^get_metrics -> ok: window_ms=[0-9]+ cpu_busy_pct=[0-9]+ timer_irq_ps=' '$LOG'"
 check "get_metrics 看到泄漏的堆和缺页" "grep -qE '^get_metrics -> ok: .*heap_used=(6553[6-9]|[7-9][0-9]{4}|[1-9][0-9]{5,}) .*demand_faults=[1-9]' '$LOG'"
 check "devmode off 后系统级工具再次被拒绝" "[ \"\$(grep -c 'inject_fault -> denied_by_policy' '$LOG')\" -ge 2 ]"
