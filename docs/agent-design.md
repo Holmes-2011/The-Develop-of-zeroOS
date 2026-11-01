@@ -171,7 +171,7 @@ Agent 循环解析出来，交给工具接口；工具接口按权限等级决�
 | 磁盘 | **v0.11** ✅ | 块设备接口 + ATA PIO 驱动（QEMU 里约 7–8 MB/s，3GB 约 7 分钟）；AHCI / NVMe 以后挂在同一接口下 | 加载 GB 级权重 |
 | **感知层** | **v0.12** ✅ | 各子系统计数器；时钟中断里每 100 毫秒采样一次；事件日志；按需分页区（缺页可观测、不再停机）；`metrics` / `events` / `telstream` | **Agent 第一次看得见系统内部** |
 | 工具层 | **v0.13** ✅ | 工具登记 + 4 级权限 + 开发者模式 + 内核绘制的确认框（丢弃提前敲好的按键、20 秒超时）+ 审计日志；`heap_check` / `pmm_check` 诊断；`inject_fault` 故障注入（仅开发者模式）。人用的 `tool` 命令和 Agent 走同一个入口 | Agent 能查、能测；能制造故障来训练和验证系统直觉 |
-| 桥接协议（内核侧） | v0.14 | 串口接收（IRQ4）+ JSON Lines 协议 + 事件推送 + `verdict` 接收 + `get_intuition` 工具（见 `agent-bridge-protocol.md`） | **宿主机上的 Agent 第一次能操作 zeroOS**；直觉模块通过采样流常驻 |
+| 桥接协议（内核侧） | **v0.14** ✅ | 串口接收（IRQ4）+ JSON Lines 协议 + 事件推送 + `verdict` 接收 + `get_intuition` 工具（见 `agent-bridge-protocol.md`）；`bridge_test.py` 35 步协议测试 | **宿主机上的 Agent 第一次能操作 zeroOS**；直觉模块通过采样流常驻 |
 | 用户态 | 之后 | ring 3、TSS、系统调用、任务切换 | 阶段 A 的前提 |
 | Agent 搬进 zeroOS（阶段 A） | 之后 | 协议从串口换成系统调用；模型推理（积木式引擎）在用户态运行 | 不再依赖宿主机 |
 | 64 位 | 之后 | 长模式、更大地址空间 | 3B 以上的模型 |

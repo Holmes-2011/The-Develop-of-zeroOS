@@ -1,0 +1,36 @@
+[通过] hello → welcome（version 1, devmode 0, kernel v0.14, uptime>0）
+[通过] tools 清单：count=13，收到 13 条 tool，4 个等级齐全
+[通过]   等级取值 = readonly/reversible/destructive/system
+[通过]   inject_fault 是 system，get_intuition 是 readonly
+[通过] call get_uptime → ok，输出 uptime_ms=...
+[通过] call get_memory → ok
+[通过] call heap_check → ok
+[通过] call get_intuition（还没收到判断）→ none
+[通过] call 未知工具 → unknown_tool
+[通过] call set_telstream maybe → bad_args
+[通过] call inject_fault（默认模式）→ denied_by_policy，且没有 confirm 消息
+[通过] call clear_events → 先收到 confirm{id 8, destructive}
+[通过]   串口发 y 不能回答确认框（3 秒内没有 result）
+[通过]   物理键盘按 n → result denied_by_user
+[通过]   确认框期间排队的 call 99 在框结束后得到 result
+[通过] call clear_events，键盘按 y → result ok cleared=...
+[通过]   （call devmode 不是工具，被当成 unknown_tool，不影响后续）
+[通过] 键盘打开开发者模式后重新握手：welcome devmode=1
+[通过] call inject_fault spin 300（开发者模式）→ confirm{system} → 按 y → ok
+[通过] 事件推送：bad_free 之后收到 event{name:"heap bad free", t_ms, count, a}（收到 ['heap bad free']）
+[通过] verdict → ack；get_intuition 看到 class/confidence，note 里非 ASCII 被换成 ?
+[通过] verdict normal, confidence 250 → 截到 100，count=2
+[通过] verdict 缺 class → error bad_fields
+[通过] 数组（不在子集里）→ error bad_json
+[通过] 非 JSON → error bad_json，带前 40 字节
+[通过] 未知类型 → error unknown_type got=frobnicate
+[通过] 600 字节的行 → error line_too_long
+[通过]   超长行之后协议恢复正常：call get_uptime → ok
+[通过] hello version 2 → version_mismatch want=1，之后的 call 被忽略
+[通过] 重新 hello version 1 → 恢复
+[通过] get_events 的输出能被 JSON 解析（转义正确）
+[通过] get_cpu 输出里的引号经转义后原样恢复
+[通过] 通过协议打开遥测流：1.5 秒收到 15 行 T,（≥8）
+[通过] 审计日志里串口来的调用 caller=agent（26 条），含 denied_by_user / denied_by_policy
+[通过] 所有 @ 行都是合法 JSON（坏行 0）
+bridge_test: 35/35 passed

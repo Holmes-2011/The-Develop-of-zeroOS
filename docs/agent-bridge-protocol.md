@@ -122,7 +122,7 @@ zeroOS → 宿主机   @{"type":"ack","what":"verdict"}
 
 每条错误同时记一条 `protocol error` 事件（`a` = 错误代码的序号）。
 
-## 9. 内核侧需要新增的（v0.14）
+## 9. 内核侧需要新增的（v0.14）—— **已实现**（`versions/v0.14-bridge/`：`serial.c` 接收、`kjson.c`、`bridge.c`；`bridge_test.py` 覆盖本文档的每一节）
 
 | 项 | 说明 |
 |---|---|
