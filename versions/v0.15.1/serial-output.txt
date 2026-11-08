@@ -1,0 +1,402 @@
+zeroOS kernel v0.15.1: entered protected mode, kmain() started
+zeroOS kernel v0.15.1: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.15.1: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.15.1: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.15.1: FPU + SSE2 enabled
+zeroOS kernel v0.15.1: clock source: TSC
+zeroOS kernel v0.15.1: physical memory manager ready
+zeroOS kernel v0.15.1: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
+zeroOS kernel v0.15.1: kernel heap ready at 0xF0000000
+zeroOS kernel v0.15.1: telemetry sampling every 100 ms
+zeroOS kernel v0.15.1: ATA disks found: 2
+zeroOS kernel v0.15.1: shell ready on screen and COM1
+zeroOS kernel v0.15.1: agent bridge listening on COM1 (protocol v1)
+zeroOS kernel v0.15.1: tool layer ready, developer mode off
+zeroOS v0.15
+Type 'help' for a list of commands.
+
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  sleep     sleep <ms>: wait (keys typed meanwhile are queued)
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  metrics   counters, rates and CPU load (last 1 s)
+  events    recent notable events
+  telstream telstream on|off: one sample per line on COM1
+  tools     list tools and their permission levels
+  tool      tool <name> [args]: call a tool through the permission layer
+  devmode   devmode on|off: developer mode (unlocks system-level tools)
+  audit     audit log of tool calls
+  shutdown  power off the machine (ACPI S5; falls back to halt)
+  version   kernel version
+zeroOS> uptime
+uptime: 1.11 s (clock: tsc; 100 timer interrupts)
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7859 free / 7870 usable (31436 KB free)
+kernel: phys 0x00100000 - 0x001200C0 (virt 0xC0100000), page bitmap up to 0x00122000
+paging: on, physical window 0xC0000000 covers up to 0x01FE0000, 9 page tables
+stack:  16 KB at 0xC0113000, high-water 324 bytes
+heap:   0xF0000000, 4 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> memtest
+  [ok]   pmm: 64 pages are aligned, distinct, above the kernel
+  [ok]   pmm: free count dropped by 64
+  [ok]   pmm: 256 KB written and read back intact
+  [ok]   pmm: all pages returned
+  (a 'double free' warning is expected next)
+pmm: double free of page 0x0012D000
+  [ok]   pmm: double free detected, count unchanged
+  [ok]   paging: page 0 is unmapped (null pointers fault)
+  [ok]   paging: VGA memory is reachable through the physical window
+  [ok]   paging: low addresses are NOT identity-mapped any more (user space is empty)
+  [ok]   paging: map 0xFC000000 to a fresh page
+  [ok]   paging: write via the new mapping, read via the physical window
+  [ok]   paging: unmap
+  [ok]   heap: kmalloc(0) returns null
+  [ok]   heap: 40 blocks of 1..500 bytes, 8-byte aligned
+  [ok]   heap: no two blocks overlap
+  [ok]   heap: free half, reallocate, all contents intact
+  [ok]   heap: everything freed and merged back together
+  [ok]   heap: 100 KB block (heap grows by mapping new pages)
+  [ok]   heap: freed pages go back to the page allocator
+  [ok]   heap: a failed oversize kmalloc leaves free pages and heap size untouched
+  (a heap warning is expected next)
+heap: double free of 0xF0000010
+  [ok]   heap: double free detected, heap unchanged
+  [ok]   stack: guard word at the bottom is intact (no overflow so far)
+  [ok]   stack: high-water mark is plausible (used, but under 14 KB of 16)
+  [ok]   telemetry: heap counter matches a full heap walk
+  [ok]   demand: 2 untouched pages mapped on first access (2 faults, no halt)
+  [ok]   demand: release unmaps the pages and returns them
+  [ok]   telemetry: sampling continues every 100 ms while the main loop is busy
+memtest: 26/26 passed
+zeroOS> cpu
+vendor: GenuineIntel
+model:  QEMU Virtual CPU version 2.5+
+features: fpu fxsr sse sse2 sse3 tsc
+floating point: enabled (x87 + SSE2)
+clock: TSC at 1000 MHz
+zeroOS> mathtest
+  [ok]   basic float arithmetic
+  [ok]   1/0 = +inf (no exception)
+  [ok]   0/0 = nan (no exception)
+  [ok]   sqrtf: 12 points, max error 0.19 eps (limit 1)
+  [ok]   expf : 82 points, max error 0.56 eps (limit 4)
+  [ok]   logf : 23 points, max error 0.47 eps (limit 4)
+  [ok]   sinf : 45 points, max error 0.34 eps (limit 4)
+  [ok]   cosf : 45 points, max error 0.25 eps (limit 4)
+  [ok]   tanhf: 44 points, max error 0.30 eps (limit 4)
+  powf : max error 2.89 eps
+  [ok]   powf within 32 eps (RoPE frequencies)
+  [ok]   special values (exp/log/sqrt)
+  [ok]   xmm0-7 survive 30 timer interrupts
+mathtest: 12/12 passed
+zeroOS> bench
+matrix x vector, 1024 x 1024, about 1 second each...
+  f32: 43.0 M multiply-adds/s
+  q8 : 20.7 M multiply-adds/s
+  q4 : 31.8 M multiply-adds/s
+estimated time per generated token (matrix work only):
+    8-bit: 1B model ~48.3 s/token, 3B model ~144.8 s/token
+    4-bit: 1B model ~31.4 s/token, 3B model ~94.3 s/token
+note: single core; under QEMU on a non-x86 Mac every x86 instruction is
+      emulated in software, so real x86 hardware is many times faster.
+zeroOS> mem
+BIOS memory map (E820):
+  0x00000000 - 0x0009FC00  usable
+  0x0009FC00 - 0x000A0000  reserved
+  0x000F0000 - 0x00100000  reserved
+  0x00100000 - 0x01FE0000  usable
+  0x01FE0000 - 0x02000000  reserved
+  0xFFFC0000 - 0xFFFFFFFF  reserved
+pages:  7843 free / 7870 usable (31372 KB free)
+kernel: phys 0x00100000 - 0x001200C0 (virt 0xC0100000), page bitmap up to 0x00122000
+paging: on, physical window 0xC0000000 covers up to 0x01FE0000, 9 page tables
+stack:  16 KB at 0xC0113000, high-water 508 bytes
+heap:   0xF0000000, 68 KB mapped, 0 bytes in use, 1 blocks
+zeroOS> disks
+ata0: 512 KB, LBA48, "QEMU HARDDISK"
+ata1: 143 GB, LBA48, "QEMU HARDDISK"
+zeroOS> diskread ata0 0
+FA 31 C0 8E D8 8E C0 8E D0 BC 00 7C FB 88 16 36  .1.........|...6
+7D BD 00 01 89 E8 83 F8 40 76 03 B8 40 00 A3 6A  }.......@v..@..j
+7D C6 06 37 7D 03 BE 68 7D 8A 16 36 7D B4 42 CD  }..7}..h}..6}.B.
+13 73 10 30 E4 CD 13 FE 0E 37 7D 75 E9 BE 38 7D  .s.0.....7}u..8}
+... last 2 bytes: 55 AA (boot signature)
+zeroOS> diskcheck ata1 0 16384
+diskcheck: 16384 sectors, 0 bad
+zeroOS> diskcheck ata1 268435455 2
+diskcheck: 2 sectors, 0 bad
+zeroOS> diskcheck ata1 300000000 1
+diskcheck: 1 sectors, 0 bad
+zeroOS> diskbench ata1 8
+diskbench: read 8 MB in 2326 ms = 3521 KB/s
+  loading 1 GB would take about 297 s, 1.5 GB about 446 s, 3 GB about 893 s
+zeroOS> metrics
+metrics (last 0.9 s; 175 samples since boot, every 100 ms):
+  irq      timer 1725 (95/s), keyboard 340 (14/s), other 0, spurious 0
+  keyboard chars 170, dropped 0
+  heap     used 0 B, mapped 68 KB
+  heap     allocs 71 (0/s), frees 71 (1/s), failed 1, bad frees 1
+  pages    free 7843, allocs 10338 (0/s), frees 10311 (241/s), bad frees 1
+  demand   faults 2 (0/s), mapped 0 pages
+  cpu      busy 66%
+zeroOS> events
+events: 5 since boot (showing last 5)
+       0.071 s  boot
+       1.750 s  page bad free (0x0012D000)
+       1.814 s  heap allocation failed (32387072)
+       1.828 s  heap bad free (0xF0000010)
+       1.844 s  demand fault x2 (0xF800501C)
+zeroOS> telstream on
+TH,seq,t_ms,irq_timer,irq_keyboard,irq_other,irq_spurious,kbd_chars,kbd_drops,heap_allocs,heap_frees,heap_fails,heap_bad_frees,heap_used,heap_mapped,pages_free,page_allocs,page_frees,page_bad_frees,demand_faults,idle_us
+telemetry stream on: one line per sample on COM1 (serial only)
+zeroOS> 
+T,187,18866,1852,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,9608139
+T,188,18967,1862,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,9706844
+T,189,19066,1872,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,9803127
+T,190,19167,1882,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,9900283
+T,191,19266,1892,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,9998098
+T,192,19366,1902,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10097444
+T,193,19467,1912,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10197494
+T,194,19566,1922,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10295697
+T,195,19667,1932,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10394145
+T,196,19767,1942,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10493260
+T,197,19875,1953,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10599614
+T,198,19966,1962,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10685643
+T,199,20066,1972,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10784964
+T,200,20176,1983,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10893607
+T,201,20266,1992,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,10982408
+T,202,20367,2002,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,11082432
+T,203,20479,2004,382,0,0,191,0,71,71,1,1,0,69632,7843,10338,10311,1,2,11082573
+telstream off
+telemetry stream off
+zeroOS> tools
+mode: default (system-level tools denied; 'devmode on' to unlock)
+  get_uptime    readonly    time since boot and clock source
+  get_memory    readonly    free pages, heap usage, demand-paged pages
+  get_cpu       readonly    processor vendor, model, float and clock
+  get_metrics   readonly    rates over the last second and CPU busy percent
+  get_events    readonly    recent notable events
+  list_disks    readonly    block devices and their sizes
+  heap_check    readonly    walk the kernel heap and verify every block
+  pmm_check     readonly    recount free pages in the bitmap vs the counter
+  stack_check   readonly    kernel stack size, high-water mark, overflow guard
+  get_intuition readonly    last verdict submitted by the host-side intuition model
+  set_telstream reversible  start/stop the telemetry stream on COM1  args: on|off
+  clear_events  destructive erase the event log
+  inject_fault  system      deliberately cause a fault to train the system intuition  args: heap_leak|bad_free|demand_touch|spin <ms>|stack_use <kb>
+zeroOS> tool get_uptime
+get_uptime -> ok: uptime_ms=22085 clock=tsc timer_irqs=2165
+zeroOS> tool get_memory
+get_memory -> ok: free_pages=7843 usable_pages=7870 free_kb=31372 heap_used=0 heap_mapped=69632 heap_blocks=1 demand_pages=0
+zeroOS> tool heap_check
+heap_check -> ok: ok blocks=1
+zeroOS> tool pmm_check
+pmm_check -> ok: ok bitmap_free=7843 counter_free=7843
+zeroOS> tool nosuch
+nosuch -> unknown_tool: unknown tool: nosuch
+zeroOS> tool set_telstream maybe
+set_telstream -> bad_args: bad arguments; expected: on|off
+zeroOS> tool clear_events
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run clear_events [destructive]
+ | erase the event log
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: DENIED by user       
+clear_events -> denied_by_user: denied by user
+zeroOS> tool clear_events
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run clear_events [destructive]
+ | erase the event log
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: ALLOWED by user      
+clear_events -> ok: cleared=6
+zeroOS> tool inject_fault heap_leak
+inject_fault -> denied_by_policy: denied by policy: system-level tools need developer mode (devmode on)
+zeroOS> sleep 3000
+zeroOS> tool clear_events
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run clear_events [destructive]
+ | erase the event log
+ | discarded 3 queued keystroke(s) typed before this box appeared
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: DENIED by user       
+clear_events -> denied_by_user: denied by user
+zeroOS> devmode on
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to turn developer mode ON [system]
+ | system-level tools (fault injection, ...) become available after confirmation
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: ALLOWED by user      
+developer mode ON
+zeroOS> tool inject_fault heap_leak
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run inject_fault heap_leak [system]
+ | deliberately cause a fault to train the system intuition
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: ALLOWED by user      
+inject_fault -> ok: leaked 65536 bytes (total leaks 1)
+zeroOS> tool inject_fault demand_touch
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run inject_fault demand_touch [system]
+ | deliberately cause a fault to train the system intuition
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...   | answer: ALLOWED by user      
+inject_fault -> ok: touched demand page, demand_pages=1
+zeroOS> tool set_telstream on
+TH,seq,t_ms,irq_timer,irq_keyboard,irq_other,irq_spurious,kbd_chars,kbd_drops,heap_allocs,heap_frees,heap_fails,heap_bad_frees,heap_used,heap_mapped,pages_free,page_allocs,page_frees,page_bad_frees,demand_faults,idle_us
+set_telstream -> ok: telstream=on
+zeroOS> 
+T,381,38273,3766,1040,0,0,505,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,26727003
+tool inject_fault spin 1200
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run inject_fault spin 1200 [system]
+ | deliberately cause a fault to train the system intuition
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...  
+T,382,38373,3776,1044,0,0,507,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,26825762
+T,383,38474,3786,1050,0,0,510,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,26926580
+T,384,38573,3796,1054,0,0,512,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27025335
+T,385,38673,3806,1058,0,0,514,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27125472
+T,386,38820,3816,1058,0,0,514,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27272286
+T,387,38873,3821,1060,0,0,515,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27324229
+T,388,38972,3831,1064,0,0,517,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27423268
+T,389,39072,3841,1070,0,0,519,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27523315
+T,390,39172,3851,1074,0,0,521,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27622754
+T,391,39271,3861,1080,0,0,524,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27721878
+T,392,39373,3870,1083,0,0,526,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27822800
+T,393,39472,3879,1087,0,0,528,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,27921601
+T,394,39572,3889,1092,0,0,530,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28021480
+T,395,39672,3899,1096,0,0,532,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28121201
+T,396,39772,3909,1098,0,0,533,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,397,39866,3918,1098,0,0,533,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,398,39972,3929,1098,0,0,533,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+ | answer: ALLOWED by user      
+inject_fault -> ok: spun for 1200 ms
+zeroOS> 
+T,399,40078,3939,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,400,40173,3949,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,401,40272,3959,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,402,40371,3969,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,403,40471,3979,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,404,40572,3989,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,405,40671,3999,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,406,40771,4009,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,407,40871,4019,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,408,40971,4029,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,409,41071,4039,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,410,41172,4049,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28139646
+T,411,41271,4059,1100,0,0,534,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28170988
+tool inject_fault spin
+
+ +-- CONFIRM ----------------------------------------------------------+ 
+ | shell wants to run inject_fault spin [system]
+ | deliberately cause a fault to train the system intuition
+ | press  y = allow   n = deny   (physical keyboard only)
+ | waiting 20 s ...  
+T,412,41371,4069,1105,0,0,537,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28270200
+T,413,41470,4079,1110,0,0,539,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28369069
+T,414,41570,4089,1115,0,0,542,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28468813
+T,415,41671,4099,1118,0,0,543,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28568935
+T,416,41770,4109,1123,0,0,545,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28668409
+T,417,41871,4119,1130,0,0,548,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28768607
+T,418,41970,4129,1135,0,0,551,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28867995
+T,419,42070,4139,1140,0,0,553,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,28967833
+T,420,42170,4149,1145,0,0,556,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,29067689
+T,421,42271,4159,1148,0,0,557,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,29095552
+T,422,42370,4169,1148,0,0,557,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,29095552
+T,423,42470,4179,1148,0,0,557,0,72,71,1,1,65536,69632,7841,10340,10311,1,3,29095552
+ | answer: ALLOWED by user      
+inject_fault -> bad_args: bad arguments; expected: heap_leak|bad_free|demand_touch|spin <ms>|stack_use <kb>
+zeroOS> tool set_telstream off
+set_telstream -> ok: telstream=off
+zeroOS> tool get_metrics
+get_metrics -> ok: window_ms=999 cpu_busy_pct=2 timer_irq_ps=98 kbd_chars=23 heap_allocs=0 heap_used=65536 free_pages=7841 demand_faults=3 bad_frees=2
+zeroOS> devmode off
+developer mode OFF
+zeroOS> tool inject_fault spin 10
+inject_fault -> denied_by_policy: denied by policy: system-level tools need developer mode (devmode on)
+zeroOS> tool get_events
+get_events -> ok: total=6; t=29517 tool call denied a=0x00000003; t=33272 tool call denied a=0x00000002; t=34342 developer mode a=0x00000001; t=37389 demand fault a=0xFA000000; t=44887 developer mode; t=45962 tool call denied a=0x00000003
+zeroOS> audit
+audit: 21 calls since boot, showing last 21:
+  22.0s shell def get_uptime    readonly    ok
+  22.8s shell def get_memory    readonly    ok
+  23.6s shell def heap_check    readonly    ok
+  24.2s shell def pmm_check     readonly    ok
+  24.7s shell def ?             readonly    unknown_tool  nosuch
+  25.8s shell def set_telstream reversible  bad_args  maybe
+  26.9s shell def clear_events  destructive denied_by_user
+  27.9s shell def clear_events  destructive ok
+  29.5s shell def inject_fault  system      denied_by_policy  heap_leak
+  33.2s shell def clear_events  destructive denied_by_user
+  34.3s shell dev devmode       system      ok  on
+  35.8s shell dev inject_fault  system      ok  heap_leak
+  37.3s shell dev inject_fault  system      ok  demand_touch
+  38.2s shell dev set_telstream reversible  ok  on
+  41.2s shell dev inject_fault  system      ok  spin 1200
+  42.5s shell dev inject_fault  system      bad_args  spin
+  43.7s shell dev set_telstream reversible  ok  off
+  44.4s shell dev get_metrics   readonly    ok
+  44.8s shell def devmode       system      ok  off
+  45.9s shell def inject_fault  system      denied_by_policy  spin 10
+  46.9s shell def get_events    readonly    ok
+zeroOS> echo clean
+clean
+zeroOS> tool stack_check
+stack_check -> ok: ok size=16384 high_water=1304 free_min=15080
+zeroOS> echo Hi, zerx oOS!
+Hi, zeroOS!
+zeroOS> foo
+unknown command: foo (type 'help')
+zeroOS>   
+zeroOS> help
+  help      list commands
+  clear     clear the screen
+  echo      print the rest of the line
+  uptime    time since boot
+  sleep     sleep <ms>: wait (keys typed meanwhile are queued)
+  mem       memory map, free pages, heap
+  memtest   self-test pages, paging and heap
+  cpu       processor model and features
+  mathtest  self-test floating point and math
+  bench     measure matrix speed, estimate LLM speed
+  disks     list disks
+  diskread  diskread <disk> <sector>: show a sector
+  diskcheck diskcheck <disk> <first> <count>: verify test pattern
+  diskbench diskbench <disk> <MB>: measure read speed
+  metrics   counters, rates and CPU load (last 1 s)
+  events    recent notable events
+  telstream telstream on|off: one sample per line on COM1
+  tools     list tools and their permission levels
+  tool      tool <name> [args]: call a tool through the permission layer
+  devmode   devmode on|off: developer mode (unlocks system-level tools)
+  audit     audit log of tool calls
+  shutdown  power off the machine (ACPI S5; falls back to halt)
+  version   kernel version
+zeroOS> clear
+zeroOS> 
