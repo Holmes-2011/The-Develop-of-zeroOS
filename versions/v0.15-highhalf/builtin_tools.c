@@ -4,7 +4,8 @@
    诊断类（只读）   heap_check pmm_check
    可撤销          set_telstream
    破坏性          clear_events
-   系统级          inject_fault（只在开发者模式下可用，而且要确认）——给系统直觉模块制造训练素材 */
+   系统级          inject_fault（只在开发者模式下可用，而且要确认）——制造可控故障，
+                供宿主机上的直觉模型 / 测试使用 */
 
 #include "tools.h"
 #include "time.h"
@@ -232,7 +233,7 @@ static int t_inject_fault(const char *args, char *out, unsigned int cap) {
     tout_init(&o, out, cap);
 
     if (word_is(args, "heap_leak")) {
-        /* 申请 64KB 不释放：heap_used 升高、再也不降，直觉模块应该学会认出"泄漏" */
+        /* 申请 64KB 不释放：heap_used 升高、再也不降，宿主机上的直觉模型应该学会认出"泄漏" */
         void *p = kmalloc(64 * 1024);
         if (!p) { tout_str(&o, "kmalloc failed"); return -1; }
         if (nleaked < 16) leaked[nleaked++] = p;

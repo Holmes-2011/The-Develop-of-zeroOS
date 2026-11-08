@@ -162,7 +162,6 @@ void tel_poll(void) {
             }
             serial_write_string("\n");
         }
-        /* v0.13：这里把采样交给系统直觉模块 */
     }
 }
 
