@@ -1,0 +1,249 @@
+#include "memtest.h"
+#include "pmm.h"
+#include "paging.h"
+#include "heap.h"
+#include "console.h"
+#include "telemetry.h"
+#include "demand.h"
+#include "time.h"
+#include "stack.h"
+
+static int passed, failed;
+
+static void check(int ok, const char *what) {
+    if (ok) {
+        console_set_color(VGA_LIGHT_GREEN);
+        console_write("  [ok]   ");
+        passed++;
+    } else {
+        console_set_color(VGA_LIGHT_RED);
+        console_write("  [FAIL] ");
+        failed++;
+    }
+    console_set_color(VGA_LIGHT_GREY);
+    console_write(what);
+    console_putc('\n');
+}
+
+/* ---------------- 物理页 ---------------- */
+#define NPAGES 64
+
+static void test_pmm(void) {
+    static unsigned int pages[NPAGES];
+    unsigned int before = pmm_free_pages();
+    int i, j, ok;
+
+    for (i = 0; i < NPAGES; i++) pages[i] = pmm_alloc_page();
+
+    ok = 1;
+    for (i = 0; i < NPAGES; i++) {
+        if (!pages[i] || (pages[i] & 0xFFF) || pages[i] < pmm_bitmap_end() || pages[i] >= pmm_max_addr()) ok = 0;
+        for (j = 0; j < i; j++) if (pages[j] == pages[i]) ok = 0;
+    }
+    check(ok, "pmm: 64 pages are aligned, distinct, above the kernel");
+    check(pmm_free_pages() == before - NPAGES, "pmm: free count dropped by 64");
+
+    /* 每页写满不同的内容，再全部读回来：页之间不能互相覆盖 */
+    for (i = 0; i < NPAGES; i++) {
+        unsigned int *p = (unsigned int *) P2V(pages[i]);
+        for (j = 0; j < 1024; j++) p[j] = pages[i] ^ (unsigned int) j;
+    }
+    ok = 1;
+    for (i = 0; i < NPAGES; i++) {
+        unsigned int *p = (unsigned int *) P2V(pages[i]);
+        for (j = 0; j < 1024; j++) if (p[j] != (pages[i] ^ (unsigned int) j)) ok = 0;
+    }
+    check(ok, "pmm: 256 KB written and read back intact");
+
+    for (i = 0; i < NPAGES; i++) pmm_free_page(pages[i]);
+    check(pmm_free_pages() == before, "pmm: all pages returned");
+
+    console_write("  (a 'double free' warning is expected next)\n");
+    pmm_free_page(pages[0]);
+    check(pmm_free_pages() == before, "pmm: double free detected, count unchanged");
+}
+
+/* ---------------- 分页 ---------------- */
+#define TEST_VIRT 0xFC000000   /* 直接映射区、堆、按需分页区之外，专门给这个测试用 */
+
+static void test_paging(void) {
+    unsigned int phys = pmm_alloc_page();
+    volatile unsigned int *virt = (volatile unsigned int *) TEST_VIRT;
+
+    check(paging_translate(0) == 0xFFFFFFFF, "paging: page 0 is unmapped (null pointers fault)");
+    check(paging_translate(KERNEL_VBASE + 0xB8000) == 0xB8000, "paging: VGA memory is reachable through the physical window");
+    check(paging_translate(0xB8000) == 0xFFFFFFFF && paging_translate(0x100000) == 0xFFFFFFFF,
+          "paging: low addresses are NOT identity-mapped any more (user space is empty)");
+
+    check(phys && paging_map(TEST_VIRT, phys, PAGE_WRITABLE) == 0
+          && paging_translate(TEST_VIRT + 0x123) == phys + 0x123, "paging: map 0xFC000000 to a fresh page");
+
+    /* 从新映射的虚拟地址写，从直接映射区读同一个物理页：确认两个地址真的是同一块内存 */
+    virt[0] = 0xC0FFEE00;
+    virt[1023] = 0x5A0A0000;
+    check(((unsigned int *) P2V(phys))[0] == 0xC0FFEE00 && ((unsigned int *) P2V(phys))[1023] == 0x5A0A0000,
+          "paging: write via the new mapping, read via the physical window");
+
+    paging_unmap(TEST_VIRT);
+    check(paging_translate(TEST_VIRT) == 0xFFFFFFFF, "paging: unmap");
+    pmm_free_page(phys);
+}
+
+/* ---------------- 内核堆 ---------------- */
+#define NBLOCKS 40
+
+static int filled_ok(const unsigned char *p, unsigned int n, unsigned char v) {
+    unsigned int i;
+    for (i = 0; i < n; i++) if (p[i] != v) return 0;
+    return 1;
+}
+
+static void fill(unsigned char *p, unsigned int n, unsigned char v) {
+    unsigned int i;
+    for (i = 0; i < n; i++) p[i] = v;
+}
+
+static void test_heap(void) {
+    static unsigned char *blk[NBLOCKS];
+    static unsigned int size[NBLOCKS];
+    struct heap_stats st, before;
+    unsigned char *big;
+    unsigned int pages_before;
+    int i, ok;
+
+    heap_get_stats(&before);
+    check(kmalloc(0) == 0, "heap: kmalloc(0) returns null");
+
+    ok = 1;
+    for (i = 0; i < NBLOCKS; i++) {
+        size[i] = (unsigned int) (i * 37 % 500) + 1;   /* 1 ~ 500 字节，各不相同 */
+        blk[i] = kmalloc(size[i]);
+        if (!blk[i] || ((unsigned int) blk[i] & 7) || (unsigned int) blk[i] < HEAP_START) ok = 0;
+        else fill(blk[i], size[i], (unsigned char) i);
+    }
+    check(ok, "heap: 40 blocks of 1..500 bytes, 8-byte aligned");
+
+    /* 全部填完再统一检查：如果有两块重叠，先填的那块会被后填的覆盖 */
+    ok = 1;
+    for (i = 0; i < NBLOCKS; i++) if (blk[i] && !filled_ok(blk[i], size[i], (unsigned char) i)) ok = 0;
+    check(ok, "heap: no two blocks overlap");
+
+    /* 释放一半，再分配一批：应该复用刚释放的空间 */
+    for (i = 0; i < NBLOCKS; i += 2) kfree(blk[i]);
+    ok = 1;
+    for (i = 0; i < NBLOCKS; i += 2) {
+        size[i] = 24;
+        blk[i] = kmalloc(size[i]);
+        if (!blk[i]) ok = 0;
+        else fill(blk[i], size[i], (unsigned char) (100 + i));
+    }
+    for (i = 0; i < NBLOCKS; i++) {
+        if (blk[i] && !filled_ok(blk[i], size[i], (unsigned char) (i % 2 ? i : 100 + i))) ok = 0;
+    }
+    check(ok, "heap: free half, reallocate, all contents intact");
+
+    for (i = 0; i < NBLOCKS; i++) kfree(blk[i]);
+    heap_get_stats(&st);
+    check(st.used == before.used && st.blocks == before.blocks,
+          "heap: everything freed and merged back together");
+
+    pages_before = pmm_free_pages();
+    big = kmalloc(100 * 1024);
+    ok = big != 0;
+    if (ok) {
+        fill(big, 100 * 1024, 0x5A);
+        ok = filled_ok(big, 100 * 1024, 0x5A);
+    }
+    heap_get_stats(&st);
+    check(ok && st.mapped >= 100 * 1024, "heap: 100 KB block (heap grows by mapping new pages)");
+    kfree(big);
+    heap_get_stats(&st);
+    /* 释放后多出 HEAP_KEEP 的部分要还回去：堆缩回 100KB 以下，物理页最多少 HEAP_KEEP 那么多 */
+    check(st.mapped < 100 * 1024 && pmm_free_pages() + HEAP_KEEP / PAGE_SIZE + 1 >= pages_before,
+          "heap: freed pages go back to the page allocator");
+
+    /* 两块空闲块合并后，被吞掉的块头会作废，所以这里报的可能是 "invalid pointer" */
+    /* 申请一块比全部空闲内存还大的：必须失败，而且失败后空闲页、堆映射大小都要和申请前一样
+       （v0.13.2 修的那个 bug：扩张中途失败会把已映射的页吞掉） */
+    {
+        unsigned int fp = pmm_free_pages();
+        struct heap_stats before_big;
+        void *huge;
+        heap_get_stats(&before_big);
+        huge = kmalloc((fp + 64) * PAGE_SIZE);
+        heap_get_stats(&st);
+        check(huge == 0 && pmm_free_pages() == fp && st.mapped == before_big.mapped,
+              "heap: a failed oversize kmalloc leaves free pages and heap size untouched");
+    }
+
+    console_write("  (a heap warning is expected next)\n");
+    kfree(big);
+    heap_get_stats(&st);
+    check(st.used == before.used, "heap: double free detected, heap unchanged");
+}
+
+/* ---------------- 感知层 + 按需分页（v0.12） ---------------- */
+static void test_telemetry(void) {
+    struct tel_sample s;
+    struct heap_stats st;
+    volatile unsigned int *p = (volatile unsigned int *) DEMAND_START;
+    volatile unsigned int *q = (volatile unsigned int *) (DEMAND_START + 5 * PAGE_SIZE);
+    unsigned int faults, free_before, pages_before, seq0, t0, ok;
+
+    /* 堆计数器是 kmalloc / kfree 时增量维护的；和"把整个堆走一遍"的结果必须一致 */
+    tel_read_now(&s);
+    heap_get_stats(&st);
+    check(s.v[TEL_HEAP_USED] == st.used, "telemetry: heap counter matches a full heap walk");
+
+    /* 按需分页：碰两个没映射的页 → 两次缺页被处理掉、内核不停机，拿到的是清零的页 */
+    faults = s.v[TEL_DEMAND_FAULTS];
+    free_before = pmm_free_pages();
+    pages_before = demand_pages();   /* v0.13.1：别的使用者（inject_fault demand_touch）可能已经映射了几页，按相对值算 */
+    ok = p[0] == 0 && p[1023] == 0;
+    p[0] = 0xDEADBEEF;
+    q[7] = 0x12345678;
+    ok = ok && p[0] == 0xDEADBEEF && q[7] == 0x12345678;
+    tel_read_now(&s);
+    check(ok && s.v[TEL_DEMAND_FAULTS] == faults + 2 && demand_pages() == pages_before + 2,
+          "demand: 2 untouched pages mapped on first access (2 faults, no halt)");
+
+    /* 释放：整个区域的页全部还回去——包括测试前就映射着的那 pages_before 页。
+       v0.13.2 起空页表也回收：本测试自己那两页的页表算进来正好抵消（建一张、还一张），
+       但测试前就映射着的页如果在别的 4MB 区域（inject_fault demand_touch 用的是 32MB 处），
+       它们的页表是在 free_before 之前建的、现在一并还回来，所以允许多出最多 pages_before 页 */
+    demand_release();
+    check(demand_pages() == 0 && pmm_free_pages() >= free_before + pages_before
+          && pmm_free_pages() <= free_before + 2 * pages_before,
+          "demand: release unmaps the pages and returns them");
+
+    /* 采样在时钟中断里做：主循环忙着跑 memtest 的时候也照样采 */
+    seq0 = tel_latest_seq();
+    t0 = time_ms();
+    while (time_ms() - t0 < 350) { }
+    check(tel_latest_seq() - seq0 >= 3 && tel_latest_seq() - seq0 <= 4,
+          "telemetry: sampling continues every 100 ms while the main loop is busy");
+}
+
+static void test_stack(void) {
+    check(!stack_overflowed(), "stack: guard word at the bottom is intact (no overflow so far)");
+    check(stack_high_water() >= 256 && stack_high_water() < 14 * 1024,
+          "stack: high-water mark is plausible (used, but under 14 KB of 16)");
+}
+
+int memtest_run(void) {
+    passed = failed = 0;
+    test_pmm();
+    test_paging();
+    test_heap();
+    test_stack();
+    test_telemetry();
+    if (failed == 0) console_set_color(VGA_LIGHT_GREEN);
+    else console_set_color(VGA_LIGHT_RED);
+    console_write("memtest: ");
+    console_write_dec((unsigned int) passed);
+    console_putc('/');
+    console_write_dec((unsigned int) (passed + failed));
+    console_write(" passed\n");
+    console_set_color(VGA_LIGHT_GREY);
+    return failed;
+}

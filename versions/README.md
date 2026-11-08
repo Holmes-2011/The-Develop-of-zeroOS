@@ -29,11 +29,12 @@
 | `v0.13-tools/` | —（本地新增） | 工具层：登记 + 权限 + 确认框 + 审计 | 齐全 | **pc 10/10（100 项）、q35 10/10（95 项）+ 486 / Pentium III / 4MB / 4GB + 4 组对照实验** | ✅ 上一版快照 |
 | `v0.13.1/` | —（本地修正版） | 工具层复审修正 4 处（1 处复测撤回） | 齐全 | **pc 10/10、q35 10/10 + 模拟用户 10 轮（80 次确认框）** | ✅ 上一版快照 |
 | `v0.13.2/` | —（本地修正版） | 全量复审 + 8 组压力测试，修 14 处 | 齐全 | **pc 10/10（104 项）、q35 10/10 + 2MB~4GB + 8 组对照实验 + 模拟用户 10 轮** | ✅ 上一版快照 |
-| `v0.14-bridge/` | —（本地新增） | 串口桥接协议内核侧 | 齐全 | **协议 35/35；pc 140 / q35 135 项；486 / 2MB / 4GB；5 组对照实验** | ✅ **当前版本** |
+| `v0.14-bridge/` | —（本地新增） | 串口桥接协议内核侧 | 齐全 | **协议 35/35；pc 140 / q35 135 项；486 / 2MB / 4GB；5 组对照实验** | ✅ 上一版快照 |
+| `v0.15-highhalf/` | —（本地新增） | 高半内核：0 ~ 3GB 留给用户态 | 齐全 | **pc 140 / q35 135 项；486 / 2MB / 1GB / q35 4GB；模拟用户 10 轮；`memtest` 26/26** | ✅ **当前版本** |
 | `experiments/` | — | 不属于版本线的独立实验 | — | — | — |
 
 > **目录约定**：仓库根目录只有 `README.md` 和 `LICENSE`，**所有源码都在 `versions/` 下**。
-> 当前版本是 `versions/v0.14-bridge/` —— 要编译就进这个目录跑 `make`。
+> 当前版本是 `versions/v0.15-highhalf/` —— 要编译就进这个目录跑 `make`。
 > 其余目录是历史版本快照，用来追溯每一版改了什么、测过什么。
 
 > **关于版本号**：上游 README 里写的 v0.1 是"清屏+停机、无任何输出"，
@@ -81,6 +82,8 @@
 - [`v0.4-nosource/TEST-RESULTS.md`](v0.4-nosource/TEST-RESULTS.md)
 - [`v0.5-pic/TEST-RESULTS.md`](v0.5-pic/TEST-RESULTS.md)
 - [`v0.5.1/TEST-RESULTS.md`](v0.5.1/TEST-RESULTS.md)
+- [`v0.14-bridge/TEST-RESULTS.md`](v0.14-bridge/TEST-RESULTS.md)
+- [`v0.15-highhalf/TEST-RESULTS.md`](v0.15-highhalf/TEST-RESULTS.md)
 - [`experiments/TEST-RESULTS.md`](experiments/TEST-RESULTS.md)
 
 ---
