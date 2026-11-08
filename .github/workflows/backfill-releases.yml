@@ -1,0 +1,48 @@
+name: 补齐历史 Release
+
+# 约定：每个 v* 标签都要有一个 Release，说明文字来自 release-notes/<标签名>.md。
+# 这个 workflow 在推送时扫一遍所有标签，缺哪个补哪个，已经有的跳过（幂等）。
+# 早于 v0.6 的版本当时还没有自动 Release，所以需要它补一次。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/backfill-releases.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库（含全部历史与标签）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: 补齐缺失的 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          created=0
+          for tag in $(git tag -l 'v*' | sort -V); do
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "已有：$tag"
+              continue
+            fi
+            notes="release-notes/$tag.md"
+            if [ ! -f "$notes" ]; then
+              echo "::warning::$tag 没有 release-notes 文件，跳过"
+              continue
+            fi
+            title="$(head -1 "$notes" | sed 's/^#[[:space:]]*//')"
+            echo "创建：$tag — $title"
+            gh release create "$tag" --title "$title" --notes-file "$notes" --verify-tag
+            created=$((created + 1))
+          done
+          echo "本次补齐 $created 个 Release"
