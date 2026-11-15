@@ -149,7 +149,7 @@ macOS 自带的是 clang 而不是 GNU gcc，而且 Apple 的 `ld` 只能生成 
 `nasm` / `clang` / `ld.lld` / `qemu-system-i386`。Linux 上装好这几个包直接 `make` 即可：
 
 ```bash
-sudo apt-get install nasm clang lld qemu-system-x86
+sudo apt-get install nasm clang lld qemu-system-x86 python3
 ```
 
 ## 编译 + 运行
