@@ -19,6 +19,8 @@
 #include "bridge.h"
 #include "usermode.h"
 
+extern const char *kernel_version_string(void);   /* kernel.c：唯一的版本串来源 */
+
 #define LINE_MAX 71   /* 一行 80 列 = 提示符 "zeroOS> " 8 列 + 输入 71 列 + 光标 1 列，长命令不会折行 */
 
 struct shell_command {
@@ -43,7 +45,9 @@ static void cmd_echo(const char *args) {
 
 static void cmd_version(const char *args) {
     (void) args;
-    console_write("zeroOS kernel v0.15.1 (x86, 32-bit protected mode, higher-half, SSE2, ATA PIO, telemetry, tools, agent bridge, shutdown)\n");
+    console_write("zeroOS kernel ");
+    console_write(kernel_version_string());
+    console_write(" (x86, 32-bit protected mode, higher-half, SSE2, ATA PIO, telemetry, tools, agent bridge, user mode, shutdown)\n");
 }
 
 static void cmd_uptime(const char *args) {

@@ -50,7 +50,7 @@ const char        *tool_outcome_name(enum tool_outcome o);
 /* 这个工具在当前模式下调用时会不会弹确认框（桥接协议要先发 confirm 消息） */
 int tools_needs_confirm(const struct tool *t);
 
-/* 调用一个工具。caller 是谁在调（"shell" / "agent"），只用于审计。
+/* 调用一个工具。caller 是谁在调（"shell" / "agent" / "user"），只用于审计。
    out 至少 TOOL_OUT_MAX 字节：成功时是工具的输出，失败时是原因 */
 enum tool_outcome  tools_invoke(const char *name, const char *args, const char *caller, char *out);
 
