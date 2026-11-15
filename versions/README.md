@@ -40,11 +40,12 @@
 | `v0.20.1/` | —（本地修正版） | 双缓冲合成桌面 + 三重退出 | 齐全 | **pc 163/163；拖动无中间帧；ESC / Exit / q 退出** | ✅ 上一版快照 |
 | `v0.20.2/` | —（本地修正版） | 桌面自启（AUTO_DESKTOP=1） | 齐全 | **默认构建 163/163；自启镜像开机进桌面、ESC 回 shell** | ✅ 上一版快照 |
 | `v0.21-net/` | —（本地新增） | virtio-net + ARP/IPv4/ICMP/UDP/DNS | 齐全 | **pc 166/166（含 3 项网络）；ping 网关、DNS 解析** | ✅ 上一版快照 |
-| `v0.22.1/` | —（本地修正版） | 拖动顺滑：场景/精灵预渲染 | 齐全 | **pc 166/166；拖动后 win0=190,146；截图无残影** | ✅ **当前版本** |
+| `v0.22.1/` | —（本地修正版） | 拖动顺滑：场景/精灵预渲染 | 齐全 | **pc 166/166；拖动后 win0=190,146；截图无残影** | ✅ 上一版快照 |
+| `v0.23-agent/` | —（本地新增） | 宿主侧 Agent 循环 + 可插拔后端 | 齐全 | **pc 166/166；Agent 脚本后端全部通过；桌面模式可调用** | ✅ **当前版本** |
 | `experiments/` | — | 不属于版本线的独立实验 | — | — | — |
 
 > **目录约定**：仓库根目录只有 `README.md` 和 `LICENSE`，**所有源码都在 `versions/` 下**。
-> 当前版本是 `versions/v0.22.1/` —— 要编译就进这个目录跑 `make`。
+> 当前版本是 `versions/v0.23-agent/` —— 要编译就进这个目录跑 `make`。
 > 其余目录是历史版本快照，用来追溯每一版改了什么、测过什么。
 
 > **关于版本号**：上游 README 里写的 v0.1 是"清屏+停机、无任何输出"，
@@ -114,6 +115,7 @@
 - [`v0.20.2/TEST-RESULTS.md`](v0.20.2/TEST-RESULTS.md)
 - [`v0.21-net/TEST-RESULTS.md`](v0.21-net/TEST-RESULTS.md)
 - [`v0.22.1/TEST-RESULTS.md`](v0.22.1/TEST-RESULTS.md)
+- [`v0.23-agent/TEST-RESULTS.md`](v0.23-agent/TEST-RESULTS.md)
 - [`experiments/TEST-RESULTS.md`](experiments/TEST-RESULTS.md)
 
 ---
