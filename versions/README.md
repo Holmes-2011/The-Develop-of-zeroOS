@@ -38,11 +38,12 @@
 | `v0.19-mouse/` | —（本地新增） | 桌面：鼠标 + 窗口 | 齐全 | **pc 160 / q35 155；桌面 3 项断言（拖动坐标 + 像素）** | ✅ 上一版快照 |
 | `v0.20-usb/` | —（本地新增） | USB 平板：UTM 可用的绝对指针 | 齐全 | **pc 163（含 3 项 USB）/ q35 155（USB 跳过）；QMP 绝对坐标拖动** | ✅ 上一版快照 |
 | `v0.20.1/` | —（本地修正版） | 双缓冲合成桌面 + 三重退出 | 齐全 | **pc 163/163；拖动无中间帧；ESC / Exit / q 退出** | ✅ 上一版快照 |
-| `v0.20.2/` | —（本地修正版） | 桌面自启（AUTO_DESKTOP=1） | 齐全 | **默认构建 163/163；自启镜像开机进桌面、ESC 回 shell** | ✅ **当前版本** |
+| `v0.20.2/` | —（本地修正版） | 桌面自启（AUTO_DESKTOP=1） | 齐全 | **默认构建 163/163；自启镜像开机进桌面、ESC 回 shell** | ✅ 上一版快照 |
+| `v0.21-net/` | —（本地新增） | virtio-net + ARP/IPv4/ICMP/UDP/DNS | 齐全 | **pc 166/166（含 3 项网络）；ping 网关、DNS 解析** | ✅ **当前版本** |
 | `experiments/` | — | 不属于版本线的独立实验 | — | — | — |
 
 > **目录约定**：仓库根目录只有 `README.md` 和 `LICENSE`，**所有源码都在 `versions/` 下**。
-> 当前版本是 `versions/v0.20.2/` —— 要编译就进这个目录跑 `make`。
+> 当前版本是 `versions/v0.21-net/` —— 要编译就进这个目录跑 `make`。
 > 其余目录是历史版本快照，用来追溯每一版改了什么、测过什么。
 
 > **关于版本号**：上游 README 里写的 v0.1 是"清屏+停机、无任何输出"，
@@ -110,6 +111,7 @@
 - [`v0.20-usb/TEST-RESULTS.md`](v0.20-usb/TEST-RESULTS.md)
 - [`v0.20.1/TEST-RESULTS.md`](v0.20.1/TEST-RESULTS.md)
 - [`v0.20.2/TEST-RESULTS.md`](v0.20.2/TEST-RESULTS.md)
+- [`v0.21-net/TEST-RESULTS.md`](v0.21-net/TEST-RESULTS.md)
 - [`experiments/TEST-RESULTS.md`](experiments/TEST-RESULTS.md)
 
 ---
