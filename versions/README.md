@@ -35,11 +35,12 @@
 | `v0.16-usermode/` | —（本地新增） | 用户态：ring 3 + int 0x80 系统调用 | 齐全 | **pc 151 / q35 146 / 486 146 / 2MB 147；用户态 7 项断言；模拟 10 轮** | ✅ 上一版快照 |
 | `v0.17-sched/` | —（本地新增） | 抢占式调度：后台任务 + 命令行同时跑 | 齐全 | **pc 160 / q35 155 / 486 155 / 2MB 156；调度器 9 项断言；模拟 10 轮** | ✅ 上一版快照 |
 | `v0.18-gfx/` | —（本地新增） | 图形模式：VBE 1024×768×32 + 帧缓冲控制台 | 齐全 | **pc 157 / q35 152 / 486 152 / 2MB 153；图形 3 项断言（像素校验）** | ✅ 上一版快照 |
-| `v0.19-mouse/` | —（本地新增） | 桌面：鼠标 + 窗口 | 齐全 | **pc 160 / q35 155；桌面 3 项断言（拖动坐标 + 像素）** | ✅ **当前版本** |
+| `v0.19-mouse/` | —（本地新增） | 桌面：鼠标 + 窗口 | 齐全 | **pc 160 / q35 155；桌面 3 项断言（拖动坐标 + 像素）** | ✅ 上一版快照 |
+| `v0.20-usb/` | —（本地新增） | USB 平板：UTM 可用的绝对指针 | 齐全 | **pc 163（含 3 项 USB）/ q35 155（USB 跳过）；QMP 绝对坐标拖动** | ✅ **当前版本** |
 | `experiments/` | — | 不属于版本线的独立实验 | — | — | — |
 
 > **目录约定**：仓库根目录只有 `README.md` 和 `LICENSE`，**所有源码都在 `versions/` 下**。
-> 当前版本是 `versions/v0.19-mouse/` —— 要编译就进这个目录跑 `make`。
+> 当前版本是 `versions/v0.20-usb/` —— 要编译就进这个目录跑 `make`。
 > 其余目录是历史版本快照，用来追溯每一版改了什么、测过什么。
 
 > **关于版本号**：上游 README 里写的 v0.1 是"清屏+停机、无任何输出"，
@@ -104,6 +105,7 @@
 - [`v0.17-sched/TEST-RESULTS.md`](v0.17-sched/TEST-RESULTS.md)
 - [`v0.18-gfx/TEST-RESULTS.md`](v0.18-gfx/TEST-RESULTS.md)
 - [`v0.19-mouse/TEST-RESULTS.md`](v0.19-mouse/TEST-RESULTS.md)
+- [`v0.20-usb/TEST-RESULTS.md`](v0.20-usb/TEST-RESULTS.md)
 - [`experiments/TEST-RESULTS.md`](experiments/TEST-RESULTS.md)
 
 ---
