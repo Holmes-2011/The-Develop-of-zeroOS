@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.16**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.17**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 >
 > **Wiki**：每个子系统的实现详解、测试方法与路线图 → <https://github.com/Holmes-2011/The-Develop-of-zeroOS/wiki>
@@ -16,7 +16,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
 带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数、ATA 硬盘驱动，以及感知层（计数器、采样、事件日志）。
 
-**当前版本：v0.16（用户态：ring 3 + 系统调用）**
+**当前版本：v0.17（抢占式调度：后台任务 + 命令行同时跑）**
 
 长期方向：把项目自己训练的模型和 Agent 整个放进 zeroOS 本机运行。设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -43,6 +43,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.15 的高半内核** | 本地新增：`link.ld` 链接到 `0xC0100000`（加载地址仍是 1MB）、`entry.asm` 临时页表 + 跳到高地址、`paging.c` 的 `P2V` / 768MB 直接映射窗口；堆挪到 `0xF0000000`、按需分页区挪到 `0xF8000000`；`memtest` 26 项 |
 | **v0.15.1 的关机** | 本地新增：`shutdown` 命令写 ACPI PM1a_CNT（`0x604`）让宿主机断电，QEMU 的 `pc` / `q35` 都能关；关不掉时退化成停机并说明。`outw` 加进 `io.h` |
 | **v0.16 的用户态** | 本地新增：`gdt.c`（ring 3 段 + TSS）、`usermode.c`（用户页、`int 0x80`、故障恢复）、`userprog.asm` / `userfault.asm`（内嵌程序）、`run` 命令 |
+| **v0.17 的调度器** | 本地新增：`sched.c`（任务表、轮转、抢占、僵尸回收、FXSAVE）、`sched_asm.asm`（`switch_to`）、`userloop.asm`（后台 tick 任务）、`jobs` / `kill` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
@@ -59,10 +60,10 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.16-usermode/    ← 当前版本，要编译就进这个目录
+└── v0.17-sched/       ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.16-usermode/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.17-sched/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> LBA 读盘 -> 要 E820 内存地图 -> 开 A20 -> 保护模式 -> 把内核复制到 1MB
@@ -107,9 +108,11 @@ elf_to_bin.py   把 kernel.elf 转成纯二进制（替代会卡住的 zig objco
 io.h            端口读写公共函数（inb / outb）
 link.ld         内核链接到 0xC0100000（高半区），加载地址仍是物理 0x100000（即 1MB）
 gdt.c / .h      GDT（ring 0 / ring 3 段 + TSS）和 TSS 的 esp0（v0.16）
+sched.c / .h    调度器：任务表、轮转、抢占、僵尸回收、FXSAVE/FXRSTOR（v0.17）
+sched_asm.asm   switch_to：保存 / 恢复内核栈和 callee-saved 寄存器（v0.17）
 usermode.c / .h 用户页、int 0x80 系统调用、ring 3 故障恢复、run 的实现（v0.16）
-usermode_asm.asm user_enter / user_resume / gdt_flush（v0.16）
-userprog.asm / userfault.asm 内嵌的 ring 3 演示程序 / 故意缺页的程序（v0.16）
+usermode_asm.asm user_enter / gdt_flush（v0.16；v0.17 起任务结束走 sched_exit）
+userprog.asm / userfault.asm / userloop.asm 内嵌的 ring 3 演示程序 / 故意缺页 / 后台 tick 循环（v0.16~v0.17）
 userbin.asm     用 incbin 把两个用户程序嵌进内核（v0.16）
 Makefile        拼出可启动镜像 build/os-image.bin
 test-boot.sh    自动化引导测试（macOS / Linux 双平台可用）
@@ -155,7 +158,7 @@ sudo apt-get install nasm clang lld qemu-system-x86 python3
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.16-usermode
+cd zeroOS/versions/v0.17-sched
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -164,7 +167,7 @@ make run    # 用 QEMU 启动它
 直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS v0.16
+zeroOS v0.17
 Type 'help' for a list of commands.
 
 zeroOS> _
@@ -195,29 +198,31 @@ zeroOS> _
 | `devmode on\|off` | 开发者模式（解锁系统级工具；打开要过确认框） |
 | `audit` | 工具调用的审计日志 |
 | `sleep <毫秒>` | 等一会儿（期间敲的键会排队） |
-| `run` | 跑一个 ring 3 程序（`run fault` 跑故意触发缺页的那个） |
+| `run` | 在后台起一个 ring 3 程序（`run loop` 跑 2 秒 tick 循环，`run fault` 故意缺页） |
+| `jobs` | 列出后台任务和状态 |
+| `kill <id>` | 杀掉一个后台任务 |
 | `shutdown` | 关机：写 ACPI PM1a_CNT 让宿主机断电；真机关不掉时退化成停机 |
-| `version` | 内核版本（v0.16） |
+| `version` | 内核版本（v0.17） |
 
 屏幕上的所有内容也会同步写到串口，`make run` 的终端里能看到一模一样的一份。
 终端里还会先打出**十五行**启动日志：
 
 ```
-zeroOS kernel v0.16: entered protected mode, kmain() started
-zeroOS kernel v0.16: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.16: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.16: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.16: FPU + SSE2 enabled
-zeroOS kernel v0.16: clock source: TSC
-zeroOS kernel v0.16: physical memory manager ready
-zeroOS kernel v0.16: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
-zeroOS kernel v0.16: user mode: ring 3 segments + TSS ready
-zeroOS kernel v0.16: kernel heap ready at 0xF0000000
-zeroOS kernel v0.16: telemetry sampling every 100 ms
-zeroOS kernel v0.16: ATA disks found: 1
-zeroOS kernel v0.16: shell ready on screen and COM1
-zeroOS kernel v0.16: agent bridge listening on COM1 (protocol v1)
-zeroOS kernel v0.16: tool layer ready, developer mode off
+zeroOS kernel v0.17: entered protected mode, kmain() started
+zeroOS kernel v0.17: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.17: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.17: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.17: FPU + SSE2 enabled
+zeroOS kernel v0.17: clock source: TSC
+zeroOS kernel v0.17: physical memory manager ready
+zeroOS kernel v0.17: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
+zeroOS kernel v0.17: user mode: ring 3 segments + TSS ready
+zeroOS kernel v0.17: kernel heap ready at 0xF0000000
+zeroOS kernel v0.17: telemetry sampling every 100 ms
+zeroOS kernel v0.17: ATA disks found: 1
+zeroOS kernel v0.17: shell ready on screen and COM1
+zeroOS kernel v0.17: agent bridge listening on COM1 (protocol v1)
+zeroOS kernel v0.17: tool layer ready, developer mode off
 ```
 
 判断方法：
@@ -306,8 +311,10 @@ system halted.
 - **v0.15** — 高半内核：内核搬到 `0xC0100000`，物理内存映射到 `0xC0000000` 起（窗口 768MB），0 ~ 3GB 留给用户态；
   堆挪到 `0xF0000000`、按需分页区挪到 `0xF8000000`；`memtest` 26 项（新增低地址不再映射、显存经窗口可达）
 - **v0.15.1** — 新增 `shutdown`：写 ACPI PM1a_CNT 让宿主机断电（QEMU pc / q35 实测都能关），ACPI 不可用时退化成停机；`io.h` 新增 `outw`
-- **v0.16（当前）** — 用户态：GDT 加 ring 3 段 + TSS，`int 0x80` 系统调用（exit / write / getkey / uptime / tool / sleep）；用户页带 USER 位、指针校验；
+- **v0.16** — 用户态：GDT 加 ring 3 段 + TSS，`int 0x80` 系统调用（exit / write / getkey / uptime / tool / sleep）；用户页带 USER 位、指针校验；
   ring 3 里缺页 / 非法指令只杀程序、回 shell；`run` / `run fault` 跑内嵌的 ring 3 程序
+- **v0.17（当前）** — 抢占式调度：每个任务独立 8KB 内核栈 + 16MB 虚拟窗口，30ms 时间片轮转；
+  shell 等键盘时让出 CPU、有按键立刻回来；FXSAVE/FXRSTOR 浮点上下文；`run` 变后台任务，新增 `jobs` / `kill`
 
 ## 版本档案：`versions/`
 
@@ -338,7 +345,8 @@ versions/
 ├── v0.14-bridge/
 ├── v0.15-highhalf/
 ├── v0.15.1/
-├── v0.16-usermode/           ← 当前版本
+├── v0.16-usermode/
+├── v0.17-sched/               ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 
