@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.18**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.19**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 >
 > **Wiki**：每个子系统的实现详解、测试方法与路线图 → <https://github.com/Holmes-2011/The-Develop-of-zeroOS/wiki>
@@ -16,7 +16,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
 带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数、ATA 硬盘驱动，以及感知层（计数器、采样、事件日志）。
 
-**当前版本：v0.18（图形模式：1024×768×32 帧缓冲 + 图形控制台）**
+**当前版本：v0.19（桌面：鼠标 + 窗口）**
 
 长期方向：把项目自己训练的模型和 Agent 整个放进 zeroOS 本机运行。设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -45,6 +45,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.16 的用户态** | 本地新增：`gdt.c`（ring 3 段 + TSS）、`usermode.c`（用户页、`int 0x80`、故障恢复）、`userprog.asm` / `userfault.asm`（内嵌程序）、`run` 命令 |
 | **v0.17 的调度器** | 本地新增：`sched.c`（任务表、轮转、抢占、僵尸回收、FXSAVE）、`sched_asm.asm`（`switch_to`）、`userloop.asm`（后台 tick 任务）、`jobs` / `kill` |
 | **v0.18 的图形模式** | 本地新增：boot 阶段 VBE 1024×768×32、`gfx.c`（LFB 映射、文字控制台、矩形 / 圆 / 渐变）、`gfx` 命令；`docs/images/v0.18-gfx.png` |
+| **v0.19 的桌面** | 本地新增：`mouse.c`（PS/2 鼠标 IRQ12）、`wm.c`（两个窗口、指针、拖动、焦点）、开机背景、`desktop` / `wminfo`、`docs/images/v0.19-desktop.png` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 ## 作者与协作者
@@ -68,10 +69,10 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.18-gfx/         ← 当前版本，要编译就进这个目录
+└── v0.19-mouse/       ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.18-gfx/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.19-mouse/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> LBA 读盘 -> 要 E820 内存地图 -> 开 A20 -> 保护模式 -> 把内核复制到 1MB
@@ -123,6 +124,8 @@ usermode_asm.asm user_enter / gdt_flush（v0.16；v0.17 起任务结束走 sched
 userprog.asm / userfault.asm / userloop.asm 内嵌的 ring 3 演示程序 / 故意缺页 / 后台 tick 循环（v0.16~v0.17）
 gfx.c / .h      VBE 帧缓冲：LFB 映射、8×16 文字、矩形 / 圆 / 渐变（v0.18）
 check_ppm.py    测试用：读 QEMU screendump 的 PPM，逐像素校验（v0.18）
+mouse.c / .h    PS/2 鼠标：aux 通道、IRQ12、3 字节包（v0.19）
+wm.c / .h       桌面与窗口：指针、拖动、焦点（v0.19）
 userbin.asm     用 incbin 把两个用户程序嵌进内核（v0.16）
 Makefile        拼出可启动镜像 build/os-image.bin
 test-boot.sh    自动化引导测试（macOS / Linux 双平台可用）
@@ -168,7 +171,7 @@ sudo apt-get install nasm clang lld qemu-system-x86 python3
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.18-gfx
+cd zeroOS/versions/v0.19-mouse
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -177,7 +180,7 @@ make run    # 用 QEMU 启动它
 直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS v0.18
+zeroOS v0.19
 Type 'help' for a list of commands.
 
 zeroOS> _
@@ -210,31 +213,34 @@ zeroOS> _
 | `sleep <毫秒>` | 等一会儿（期间敲的键会排队） |
 | `run` | 在后台起一个 ring 3 程序（`run loop` 跑 2 秒 tick 循环，`run fault` 故意缺页） |
 | `gfx` | 画一个帧缓冲演示（渐变 / 矩形 / 圆） |
+| `desktop` | 进入桌面：鼠标 + 两个窗口，ESC 回命令行 |
+| `wminfo` | 打印窗口坐标和焦点（测试用） |
 | `jobs` | 列出后台任务和状态 |
 | `kill <id>` | 杀掉一个后台任务 |
 | `shutdown` | 关机：写 ACPI PM1a_CNT 让宿主机断电；真机关不掉时退化成停机 |
-| `version` | 内核版本（v0.18） |
+| `version` | 内核版本（v0.19） |
 
 屏幕上的所有内容也会同步写到串口，`make run` 的终端里能看到一模一样的一份。
-终端里还会先打出**十六行**启动日志：
+终端里还会先打出**十七行**启动日志：
 
 ```
-zeroOS kernel v0.18: entered protected mode, kmain() started
-zeroOS kernel v0.18: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.18: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.18: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.18: FPU + SSE2 enabled
-zeroOS kernel v0.18: clock source: TSC
-zeroOS kernel v0.18: physical memory manager ready
-zeroOS kernel v0.18: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
-zeroOS kernel v0.18: user mode: ring 3 segments + TSS ready
-zeroOS kernel v0.18: graphics: 1024x768x32 via VBE
-zeroOS kernel v0.18: kernel heap ready at 0xF0000000
-zeroOS kernel v0.18: telemetry sampling every 100 ms
-zeroOS kernel v0.18: ATA disks found: 1
-zeroOS kernel v0.18: shell ready on screen and COM1
-zeroOS kernel v0.18: agent bridge listening on COM1 (protocol v1)
-zeroOS kernel v0.18: tool layer ready, developer mode off
+zeroOS kernel v0.19: entered protected mode, kmain() started
+zeroOS kernel v0.19: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.19: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.19: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.19: FPU + SSE2 enabled
+zeroOS kernel v0.19: PS/2 mouse on IRQ12 enabled
+zeroOS kernel v0.19: clock source: TSC
+zeroOS kernel v0.19: physical memory manager ready
+zeroOS kernel v0.19: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
+zeroOS kernel v0.19: user mode: ring 3 segments + TSS ready
+zeroOS kernel v0.19: graphics: 1024x768x32 via VBE
+zeroOS kernel v0.19: kernel heap ready at 0xF0000000
+zeroOS kernel v0.19: telemetry sampling every 100 ms
+zeroOS kernel v0.19: ATA disks found: 1
+zeroOS kernel v0.19: shell ready on screen and COM1
+zeroOS kernel v0.19: agent bridge listening on COM1 (protocol v1)
+zeroOS kernel v0.19: tool layer ready, developer mode off
 ```
 
 判断方法：
@@ -327,8 +333,10 @@ system halted.
   ring 3 里缺页 / 非法指令只杀程序、回 shell；`run` / `run fault` 跑内嵌的 ring 3 程序
 - **v0.17** — 抢占式调度：每个任务独立 8KB 内核栈 + 16MB 虚拟窗口，30ms 时间片轮转；
   shell 等键盘时让出 CPU、有按键立刻回来；FXSAVE/FXRSTOR 浮点上下文；`run` 变后台任务，新增 `jobs` / `kill`
-- **v0.18（当前）** — 图形模式：boot 用 VBE 切 1024×768×32，内核映射 LFB，文字控制台画到帧缓冲；
+- **v0.18** — 图形模式：boot 用 VBE 切 1024×768×32，内核映射 LFB，文字控制台画到帧缓冲；
   `gfx` 命令演示渐变 / 矩形 / 圆；测试用 `screendump` 抓帧缓冲逐像素校验
+- **v0.19（当前）** — 桌面：PS/2 鼠标（IRQ12）+ 两个窗口，拖动 / 焦点 / ESC 回命令行；
+  开机默认画深色渐变背景，不再黑底文字；`desktop` / `wminfo` 命令
 
 ## 版本档案：`versions/`
 
@@ -361,7 +369,8 @@ versions/
 ├── v0.15.1/
 ├── v0.16-usermode/
 ├── v0.17-sched/
-├── v0.18-gfx/                 ← 当前版本
+├── v0.18-gfx/
+├── v0.19-mouse/               ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 

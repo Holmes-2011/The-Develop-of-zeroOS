@@ -1,0 +1,7 @@
+--target=i386-unknown-none
+-ffreestanding
+-fno-builtin
+-fno-stack-protector
+-fno-pic
+-Wall
+-Wextra
