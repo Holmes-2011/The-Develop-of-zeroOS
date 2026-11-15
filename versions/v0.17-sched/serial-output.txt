@@ -44,7 +44,7 @@ zeroOS> help
   shutdown  power off the machine (ACPI S5; falls back to halt)
   version   kernel version
 zeroOS> uptime
-uptime: 0.77 s (clock: tsc; 69 timer interrupts)
+uptime: 0.64 s (clock: tsc; 60 timer interrupts)
 zeroOS> mem
 BIOS memory map (E820):
   0x00000000 - 0x0009FC00  usable
@@ -95,7 +95,7 @@ vendor: GenuineIntel
 model:  QEMU Virtual CPU version 2.5+
 features: fpu fxsr sse sse2 sse3 tsc
 floating point: enabled (x87 + SSE2)
-clock: TSC at 999 MHz
+clock: TSC at 1000 MHz
 zeroOS> mathtest
   [ok]   basic float arithmetic
   [ok]   1/0 = +inf (no exception)
@@ -113,12 +113,12 @@ zeroOS> mathtest
 mathtest: 12/12 passed
 zeroOS> bench
 matrix x vector, 1024 x 1024, about 1 second each...
-  f32: 118.8 M multiply-adds/s
-  q8 : 88.5 M multiply-adds/s
-  q4 : 89.8 M multiply-adds/s
+  f32: 123.9 M multiply-adds/s
+  q8 : 83.7 M multiply-adds/s
+  q4 : 74.6 M multiply-adds/s
 estimated time per generated token (matrix work only):
-    8-bit: 1B model ~11.3 s/token, 3B model ~33.9 s/token
-    4-bit: 1B model ~11.1 s/token, 3B model ~33.4 s/token
+    8-bit: 1B model ~11.9 s/token, 3B model ~35.8 s/token
+    4-bit: 1B model ~13.4 s/token, 3B model ~40.2 s/token
 note: single core; under QEMU on a non-x86 Mac every x86 instruction is
       emulated in software, so real x86 hardware is many times faster.
 zeroOS> mem
@@ -132,7 +132,7 @@ BIOS memory map (E820):
 pages:  7828 free / 7855 usable (31312 KB free)
 kernel: phys 0x00100000 - 0x0012F100 (virt 0xC0100000), page bitmap up to 0x00131000
 paging: on, physical window 0xC0000000 covers up to 0x01FE0000, 9 page tables
-stack:  16 KB at 0xC0115000, high-water 440 bytes
+stack:  16 KB at 0xC0115000, high-water 524 bytes
 heap:   0xF0000000, 68 KB mapped, 0 bytes in use, 1 blocks
 zeroOS> disks
 ata0: 512 KB, LBA48, "QEMU HARDDISK"
@@ -150,44 +150,44 @@ diskcheck: 2 sectors, 0 bad
 zeroOS> diskcheck ata1 300000000 1
 diskcheck: 1 sectors, 0 bad
 zeroOS> diskbench ata1 8
-diskbench: read 8 MB in 420 ms = 19504 KB/s
-  loading 1 GB would take about 53 s, 1.5 GB about 80 s, 3 GB about 161 s
+diskbench: read 8 MB in 500 ms = 16384 KB/s
+  loading 1 GB would take about 64 s, 1.5 GB about 96 s, 3 GB about 192 s
 zeroOS> metrics
-metrics (last 1.0 s; 125 samples since boot, every 100 ms):
-  irq      timer 1247 (99/s), keyboard 338 (29/s), other 0, spurious 0
-  keyboard chars 169, dropped 0
+metrics (last 1.0 s; 120 samples since boot, every 100 ms):
+  irq      timer 1197 (100/s), keyboard 336 (26/s), other 0, spurious 0
+  keyboard chars 168, dropped 0
   heap     used 0 B, mapped 68 KB
-  heap     allocs 71 (0/s), frees 71 (0/s), failed 1, bad frees 1
-  pages    free 7828, allocs 10323 (240/s), frees 10296 (240/s), bad frees 1
+  heap     allocs 71 (1/s), frees 71 (1/s), failed 1, bad frees 1
+  pages    free 7828, allocs 10323 (241/s), frees 10296 (241/s), bad frees 1
   demand   faults 2 (0/s), mapped 0 pages
-  cpu      busy 43%
+  cpu      busy 51%
 zeroOS> events
 events: 5 since boot (showing last 5)
-       0.058 s  boot
-       1.367 s  page bad free (0x0013C000)
-       1.396 s  heap allocation failed (32325632)
-       1.399 s  heap bad free (0xF0000010)
-       1.403 s  demand fault x2 (0xF800501C)
+       0.056 s  boot
+       1.187 s  page bad free (0x0013C000)
+       1.214 s  heap allocation failed (32325632)
+       1.218 s  heap bad free (0xF0000010)
+       1.221 s  demand fault x2 (0xF800501C)
 zeroOS> telstream on
 TH,seq,t_ms,irq_timer,irq_keyboard,irq_other,irq_spurious,kbd_chars,kbd_drops,heap_allocs,heap_frees,heap_fails,heap_bad_frees,heap_used,heap_mapped,pages_free,page_allocs,page_frees,page_bad_frees,demand_faults,idle_us
 telemetry stream on: one line per sample on COM1 (serial only)
 zeroOS> 
-T,136,13762,1367,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8762476
-T,137,13861,1377,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8860681
-T,138,13962,1387,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8959232
-T,139,14062,1397,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9058335
-T,140,14162,1407,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9157297
-T,141,14263,1417,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9257410
-T,142,14362,1427,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9355755
-T,143,14461,1437,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9453429
-T,144,14561,1447,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9552108
-T,145,14662,1457,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9650859
-T,146,14759,1465,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9706172
-T,147,14862,1476,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9808014
-T,148,14962,1486,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9906903
-T,149,15063,1496,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,10006780
-T,150,15162,1506,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,10105838
-T,151,15262,1516,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,10204070
+T,130,13157,1307,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8042708
+T,131,13257,1317,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8141976
+T,132,13357,1327,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8242003
+T,133,13457,1337,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8341305
+T,134,13557,1347,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8440992
+T,135,13657,1357,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8540449
+T,136,13758,1367,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8641090
+T,137,13858,1377,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8740804
+T,138,13958,1387,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8839988
+T,139,14057,1397,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,8939090
+T,140,14157,1407,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9038970
+T,141,14257,1417,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9138057
+T,142,14356,1427,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9234301
+T,143,14458,1437,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9334884
+T,144,14557,1447,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9433448
+T,145,14656,1457,382,0,0,191,0,71,71,1,1,0,69632,7828,10323,10296,1,2,9532009
 telstream off
 telemetry stream off
 zeroOS> tools
@@ -206,7 +206,7 @@ mode: default (system-level tools denied; 'devmode on' to unlock)
   clear_events  destructive erase the event log
   inject_fault  system      deliberately cause a fault to train the system intuition  args: heap_leak|bad_free|demand_touch|spin <ms>|stack_use <kb>
 zeroOS> tool get_uptime
-get_uptime -> ok: uptime_ms=16839 clock=tsc timer_irqs=1673
+get_uptime -> ok: uptime_ms=16173 clock=tsc timer_irqs=1608
 zeroOS> tool get_memory
 get_memory -> ok: free_pages=7828 usable_pages=7855 free_kb=31312 heap_used=0 heap_mapped=69632 heap_blocks=1 demand_pages=0
 zeroOS> tool heap_check
@@ -273,8 +273,7 @@ zeroOS> tool set_telstream on
 TH,seq,t_ms,irq_timer,irq_keyboard,irq_other,irq_spurious,kbd_chars,kbd_drops,heap_allocs,heap_frees,heap_fails,heap_bad_frees,heap_used,heap_mapped,pages_free,page_allocs,page_frees,page_bad_frees,demand_faults,idle_us
 set_telstream -> ok: telstream=on
 zeroOS> 
-T,323,32464,3234,1040,0,0,505,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25265335
-T,324,32564,3244,1040,0,0,505,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25363998
+T,316,31766,3161,1039,0,0,505,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24456660
 tool inject_fault spin 1200
 
  +-- CONFIRM ----------------------------------------------------------+ 
@@ -282,36 +281,35 @@ tool inject_fault spin 1200
  | deliberately cause a fault to train the system intuition
  | press  y = allow   n = deny   (physical keyboard only)
  | waiting 20 s ...  
-T,325,32664,3254,1046,0,0,508,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25463039
-T,326,32764,3264,1050,0,0,510,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25562650
-T,327,32864,3274,1056,0,0,513,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25662738
-T,328,32965,3284,1060,0,0,515,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25762796
-T,329,33064,3294,1066,0,0,517,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25861473
-T,330,33164,3304,1072,0,0,520,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25961149
-T,331,33264,3314,1076,0,0,522,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26060913
-T,332,33364,3324,1081,0,0,525,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26160221
-T,333,33465,3334,1086,0,0,527,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26260619
-T,334,33565,3344,1090,0,0,529,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26360730
-T,335,33665,3354,1094,0,0,531,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26460566
-T,336,33764,3364,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,337,33864,3374,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,338,33964,3384,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
+T,317,31864,3171,1044,0,0,507,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24548329
+T,318,31962,3181,1050,0,0,510,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24646769
+T,319,32062,3191,1054,0,0,512,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24745723
+T,320,32163,3201,1060,0,0,515,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24845280
+T,321,32264,3211,1066,0,0,517,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,24946241
+T,322,32362,3221,1071,0,0,520,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25044279
+T,323,32462,3231,1076,0,0,522,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25143790
+T,324,32563,3241,1080,0,0,524,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25244098
+T,325,32663,3251,1085,0,0,527,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25343957
+T,326,32764,3261,1090,0,0,529,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25444253
+T,327,32863,3270,1094,0,0,531,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25542979
+T,328,32963,3281,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,329,33062,3291,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,330,33163,3301,1098,0,0,533,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
  | answer: ALLOWED by user      
 inject_fault -> ok: spun for 1200 ms
 zeroOS> 
-T,339,34065,3394,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,340,34164,3404,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,341,34264,3414,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,342,34364,3424,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,343,34465,3434,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,344,34565,3444,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,345,34665,3454,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,346,34765,3464,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,347,34865,3474,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,348,34965,3484,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,349,35066,3494,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,350,35165,3504,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26506907
-T,351,35265,3514,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26528527
+T,331,33263,3311,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,332,33363,3321,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,333,33462,3331,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,334,33563,3341,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,335,33663,3351,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,336,33763,3361,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,337,33862,3371,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,338,33963,3381,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,339,34062,3391,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,340,34163,3401,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,341,34263,3411,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
+T,342,34363,3421,1100,0,0,534,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25589934
 tool inject_fault spin
 
  +-- CONFIRM ----------------------------------------------------------+ 
@@ -319,59 +317,58 @@ tool inject_fault spin
  | deliberately cause a fault to train the system intuition
  | press  y = allow   n = deny   (physical keyboard only)
  | waiting 20 s ...  
-T,352,35365,3524,1106,0,0,537,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26628242
-T,353,35464,3534,1111,0,0,540,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26727825
-T,354,35565,3544,1116,0,0,542,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26827722
-T,355,35665,3554,1120,0,0,544,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26927194
-T,356,35764,3564,1127,0,0,547,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27026183
-T,357,35865,3574,1132,0,0,549,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27126923
-T,358,35965,3584,1136,0,0,551,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27226493
-T,359,36065,3594,1142,0,0,554,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27326559
-T,360,36165,3604,1146,0,0,556,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27426133
-T,361,36265,3614,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27436591
-T,362,36365,3624,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27436591
-T,363,36465,3634,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27436591
+T,343,34461,3431,1102,0,0,535,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25615827
+T,344,34563,3441,1107,0,0,538,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25716763
+T,345,34663,3451,1112,0,0,540,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25816718
+T,346,34762,3461,1117,0,0,543,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,25916049
+T,347,34862,3471,1122,0,0,545,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26015417
+T,348,34962,3481,1128,0,0,547,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26115351
+T,349,35063,3491,1134,0,0,550,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26215438
+T,350,35156,3497,1136,0,0,551,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26308334
+T,351,35263,3508,1142,0,0,554,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26415320
+T,352,35363,3518,1146,0,0,556,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26514832
+T,353,35462,3528,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26515521
+T,354,35563,3538,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26515521
+T,355,35663,3548,1148,0,0,557,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,26515521
  | answer: ALLOWED by user      
 inject_fault -> bad_args: bad arguments; expected: heap_leak|bad_free|demand_touch|spin <ms>|stack_use <kb>
-zeroOS> 
-T,364,36564,3644,1150,0,0,558,0,72,71,1,1,65536,69632,7826,10325,10296,1,3,27492619
-tool set_telstream off
+zeroOS> tool set_telstream off
 set_telstream -> ok: telstream=off
 zeroOS> tool get_metrics
-get_metrics -> ok: window_ms=1000 cpu_busy_pct=0 timer_irq_ps=100 kbd_chars=25 heap_allocs=0 heap_used=65536 free_pages=7826 demand_faults=3 bad_frees=2
+get_metrics -> ok: window_ms=1000 cpu_busy_pct=1 timer_irq_ps=100 kbd_chars=24 heap_allocs=0 heap_used=65536 free_pages=7826 demand_faults=3 bad_frees=2
 zeroOS> devmode off
 developer mode OFF
 zeroOS> tool inject_fault spin 10
 inject_fault -> denied_by_policy: denied by policy: system-level tools need developer mode (devmode on)
 zeroOS> tool get_events
-get_events -> ok: total=6; t=23631 tool call denied a=0x00000003; t=27419 tool call denied a=0x00000002; t=28497 developer mode a=0x00000001; t=31543 demand fault a=0xFA000000; t=38765 developer mode; t=39809 tool call denied a=0x00000003
+get_events -> ok: total=6; t=22956 tool call denied a=0x00000003; t=26698 tool call denied a=0x00000002; t=27796 developer mode a=0x00000001; t=30877 demand fault a=0xFA000000; t=37794 developer mode; t=38840 tool call denied a=0x00000003
 zeroOS> audit
 audit: 21 calls since boot, showing last 21:
-  16.8s shell def get_uptime    readonly    ok
-  17.4s shell def get_memory    readonly    ok
-  18.2s shell def heap_check    readonly    ok
-  18.8s shell def pmm_check     readonly    ok
-  19.3s shell def ?             readonly    unknown_tool  nosuch
-  20.3s shell def set_telstream reversible  bad_args  maybe
-  21.4s shell def clear_events  destructive denied_by_user
-  22.4s shell def clear_events  destructive ok
-  23.6s shell def inject_fault  system      denied_by_policy  heap_leak
-  27.4s shell def clear_events  destructive denied_by_user
-  28.4s shell dev devmode       system      ok  on
-  29.9s shell dev inject_fault  system      ok  heap_leak
-  31.5s shell dev inject_fault  system      ok  demand_touch
-  32.4s shell dev set_telstream reversible  ok  on
-  35.2s shell dev inject_fault  system      ok  spin 1200
-  36.5s shell dev inject_fault  system      bad_args  spin
-  37.6s shell dev set_telstream reversible  ok  off
-  38.3s shell dev get_metrics   readonly    ok
-  38.7s shell def devmode       system      ok  off
-  39.8s shell def inject_fault  system      denied_by_policy  spin 10
-  40.4s shell def get_events    readonly    ok
+  16.1s shell def get_uptime    readonly    ok
+  16.8s shell def get_memory    readonly    ok
+  17.5s shell def heap_check    readonly    ok
+  18.1s shell def pmm_check     readonly    ok
+  18.6s shell def ?             readonly    unknown_tool  nosuch
+  19.7s shell def set_telstream reversible  bad_args  maybe
+  20.7s shell def clear_events  destructive denied_by_user
+  21.8s shell def clear_events  destructive ok
+  22.9s shell def inject_fault  system      denied_by_policy  heap_leak
+  26.6s shell def clear_events  destructive denied_by_user
+  27.7s shell dev devmode       system      ok  on
+  29.2s shell dev inject_fault  system      ok  heap_leak
+  30.8s shell dev inject_fault  system      ok  demand_touch
+  31.7s shell dev set_telstream reversible  ok  on
+  34.4s shell dev inject_fault  system      ok  spin 1200
+  35.6s shell dev inject_fault  system      bad_args  spin
+  36.6s shell dev set_telstream reversible  ok  off
+  37.3s shell dev get_metrics   readonly    ok
+  37.7s shell def devmode       system      ok  off
+  38.8s shell def inject_fault  system      denied_by_policy  spin 10
+  39.4s shell def get_events    readonly    ok
 zeroOS> echo clean
 clean
 zeroOS> tool stack_check
-stack_check -> ok: ok size=16384 high_water=1312 free_min=15072
+stack_check -> ok: ok size=16384 high_water=1304 free_min=15080
 zeroOS> echo Hi, zerx oOS!
 Hi, zeroOS!
 zeroOS> foo
