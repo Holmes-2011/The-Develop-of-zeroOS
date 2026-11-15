@@ -4,7 +4,7 @@ zeroOS is an experimental, community-driven operating system project currently i
 
 zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作系统项目。我们从最底层的引导层代码（Bootloader）开始构建，致力于打造一个极简、透明的系统内核。在正式版发布之前，我们向所有开发者开放，欢迎任何人提出建议并参与代码的修改与迭代，共同见证从零到一的突破。
 
-> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.20**。
+> **项目阶段**：整体处于 **V0.0.1**（早期）；引导层与内核已推进到 **v0.20.1**。
 > 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
 >
 > **Wiki**：每个子系统的实现详解、测试方法与路线图 → <https://github.com/Holmes-2011/The-Develop-of-zeroOS/wiki>
@@ -16,7 +16,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 一个从零写的 32 位 x86 裸机项目：**512 字节引导扇区 + 用 C 写的内核**，
 带串口调试输出、IDT 异常处理、PIC 重映射、PIT 时钟中断、PS/2 键盘输入、屏幕文字输出、内核命令行，内存管理（物理页分配、分页、内核堆）、浮点 / SSE2 和数学函数、ATA 硬盘驱动，以及感知层（计数器、采样、事件日志）。
 
-**当前版本：v0.20（USB 平板：UTM 里的鼠标也能动）**
+**当前版本：v0.20.1（双缓冲桌面 + 三重退出）**
 
 长期方向：把项目自己训练的模型和 Agent 整个放进 zeroOS 本机运行。设计与路线图见 [`docs/agent-design.md`](docs/agent-design.md)。
 每一版的源码、上游原始压缩包、测试结果和原始串口日志都留档在 [`versions/`](versions/)。
@@ -47,6 +47,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.18 的图形模式** | 本地新增：boot 阶段 VBE 1024×768×32、`gfx.c`（LFB 映射、文字控制台、矩形 / 圆 / 渐变）、`gfx` 命令；`docs/images/v0.18-gfx.png` |
 | **v0.19 的桌面** | 本地新增：`mouse.c`（PS/2 鼠标 IRQ12）、`wm.c`（两个窗口、指针、拖动、焦点）、开机背景、`desktop` / `wminfo`、`docs/images/v0.19-desktop.png` |
 | **v0.20 的 USB 平板** | 本地新增：`pci.c`（配置空间）、`usb.c`（UHCI + 枚举 + HID 平板）、绝对指针优先、`docs/images/v0.20-usb-mouse.png` |
+| **v0.20.1 的合成桌面** | 本地新增：`gfx.c` 双缓冲 / 裁剪 / 脏区 present；`wm.c` 窗口阴影、标题栏、任务栏、Exit 按钮、60 秒空闲退出；`docs/images/v0.20.1-desktop.png` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
 ## 作者与协作者
@@ -70,10 +71,10 @@ release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
 docs/                    设计文档（系统内置 Agent 的设计与路线图）
 versions/                版本档案：每一版的源码 + 上游原包 + 测试结果 + 串口日志
-└── v0.20-usb/         ← 当前版本，要编译就进这个目录
+└── v0.20.1/           ← 当前版本，要编译就进这个目录
 ```
 
-**当前版本的源码在 `versions/v0.20-usb/`**，里面这些文件：
+**当前版本的源码在 `versions/v0.20.1/`**，里面这些文件：
 
 ```
 boot.asm        16 位汇编：BIOS 入口 -> LBA 读盘 -> 要 E820 内存地图 -> 开 A20 -> 保护模式 -> 把内核复制到 1MB
@@ -174,7 +175,7 @@ sudo apt-get install nasm clang lld qemu-system-x86 python3
 ## 编译 + 运行
 
 ```bash
-cd zeroOS/versions/v0.20-usb
+cd zeroOS/versions/v0.20.1
 make        # 生成 build/os-image.bin
 make run    # 用 QEMU 启动它
 ```
@@ -183,7 +184,7 @@ make run    # 用 QEMU 启动它
 直接开机，不做开机动画/logo 这些"杂七杂八"的东西，启动日志也只走串口：
 
 ```
-zeroOS v0.20
+zeroOS v0.20.1
 Type 'help' for a list of commands.
 
 zeroOS> _
@@ -221,29 +222,29 @@ zeroOS> _
 | `jobs` | 列出后台任务和状态 |
 | `kill <id>` | 杀掉一个后台任务 |
 | `shutdown` | 关机：写 ACPI PM1a_CNT 让宿主机断电；真机关不掉时退化成停机 |
-| `version` | 内核版本（v0.20） |
+| `version` | 内核版本（v0.20.1） |
 
 屏幕上的所有内容也会同步写到串口，`make run` 的终端里能看到一模一样的一份。
 终端里还会先打出**十七行**启动日志：
 
 ```
-zeroOS kernel v0.20: entered protected mode, kmain() started
-zeroOS kernel v0.20: IDT installed, CPU exceptions now caught
-zeroOS kernel v0.20: PIT at 100 Hz, IRQ0 enabled
-zeroOS kernel v0.20: PS/2 keyboard on IRQ1 enabled
-zeroOS kernel v0.20: FPU + SSE2 enabled
-zeroOS kernel v0.20: PS/2 mouse on IRQ12 enabled
-zeroOS kernel v0.20: clock source: TSC
-zeroOS kernel v0.20: physical memory manager ready
-zeroOS kernel v0.20: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
-zeroOS kernel v0.20: user mode: ring 3 segments + TSS ready
-zeroOS kernel v0.20: graphics: 1024x768x32 via VBE
-zeroOS kernel v0.20: kernel heap ready at 0xF0000000
-zeroOS kernel v0.20: telemetry sampling every 100 ms
-zeroOS kernel v0.20: ATA disks found: 1
-zeroOS kernel v0.20: shell ready on screen and COM1
-zeroOS kernel v0.20: agent bridge listening on COM1 (protocol v1)
-zeroOS kernel v0.20: tool layer ready, developer mode off
+zeroOS kernel v0.20.1: entered protected mode, kmain() started
+zeroOS kernel v0.20.1: IDT installed, CPU exceptions now caught
+zeroOS kernel v0.20.1: PIT at 100 Hz, IRQ0 enabled
+zeroOS kernel v0.20.1: PS/2 keyboard on IRQ1 enabled
+zeroOS kernel v0.20.1: FPU + SSE2 enabled
+zeroOS kernel v0.20.1: PS/2 mouse on IRQ12 enabled
+zeroOS kernel v0.20.1: clock source: TSC
+zeroOS kernel v0.20.1: physical memory manager ready
+zeroOS kernel v0.20.1: paging: higher-half kernel at 0xC0100000, low 3GB unmapped
+zeroOS kernel v0.20.1: user mode: ring 3 segments + TSS ready
+zeroOS kernel v0.20.1: graphics: 1024x768x32 via VBE
+zeroOS kernel v0.20.1: kernel heap ready at 0xF0000000
+zeroOS kernel v0.20.1: telemetry sampling every 100 ms
+zeroOS kernel v0.20.1: ATA disks found: 1
+zeroOS kernel v0.20.1: shell ready on screen and COM1
+zeroOS kernel v0.20.1: agent bridge listening on COM1 (protocol v1)
+zeroOS kernel v0.20.1: tool layer ready, developer mode off
 ```
 
 判断方法：
@@ -340,8 +341,10 @@ system halted.
   `gfx` 命令演示渐变 / 矩形 / 圆；测试用 `screendump` 抓帧缓冲逐像素校验
 - **v0.19** — 桌面：PS/2 鼠标（IRQ12）+ 两个窗口，拖动 / 焦点 / ESC 回命令行；
   开机默认画深色渐变背景，不再黑底文字；`desktop` / `wminfo` 命令
-- **v0.20（当前）** — USB 平板：PCI 找 UHCI、端口复位与枚举、HID 中断 IN 读绝对坐标；
+- **v0.20** — USB 平板：PCI 找 UHCI、端口复位与枚举、HID 中断 IN 读绝对坐标；
   桌面优先用绝对指针（UTM 的 usb-tablet），PS/2 作回退
+- **v0.20.1（当前）** — 双缓冲合成：桌面画后台缓冲、按脏区拷前台，拖动不再闪；
+  窗口阴影 / 标题栏 / 任务栏 / Exit 按钮；ESC、q、Exit、60 秒空闲四路退出，不会被锁在桌面
 
 ## 版本档案：`versions/`
 
@@ -376,7 +379,8 @@ versions/
 ├── v0.17-sched/
 ├── v0.18-gfx/
 ├── v0.19-mouse/
-├── v0.20-usb/                 ← 当前版本
+├── v0.20-usb/
+├── v0.20.1/                   ← 当前版本
 └── experiments/                  ← 不属于版本线的独立实验（图形模式画圆环）
 ```
 
