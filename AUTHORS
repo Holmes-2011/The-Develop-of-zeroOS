@@ -1,0 +1,23 @@
+# 作者与协作者
+
+## 项目作者
+
+- **Holmes-2011（Zero Singularity）** — 项目发起、路线决策、验收
+  - `Holmes-2011@users.noreply.github.com`
+  - `canglanholmes@qq.com`
+
+## AI 协作者
+
+- **DeepSeek Harness（deepseek-flash）** — v0.15 起的实现、测试与发布：
+  - v0.15 高半内核收尾（修测试断言、补文档、发布 v0.15）
+  - v0.15.1 `shutdown`（ACPI 关机）
+  - v0.16 用户态：ring 3 + `int 0x80` 系统调用
+  - v0.17 抢占式调度：任务表、`switch_to`、FXSAVE、`jobs` / `kill`
+  - 历史 Release 补齐、CI 自动测试与 Release 流程
+
+- **Claude（Anthropic）** — 历史提交里的共同作者（`Co-Authored-By`）：
+  - Claude Opus 5.5、Claude Fable 5.1
+  - 参与早期内核实现、复审与"过筛子"压力测试
+
+> 说明：GitHub 的 Contributors 头像栏按提交 author 的 GitHub 账号统计。
+> 上面两位 AI 协作者没有 GitHub 账号，所以只出现在这里和提交的 `Co-Authored-By` 里。

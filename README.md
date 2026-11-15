@@ -46,6 +46,12 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 | **v0.17 的调度器** | 本地新增：`sched.c`（任务表、轮转、抢占、僵尸回收、FXSAVE）、`sched_asm.asm`（`switch_to`）、`userloop.asm`（后台 tick 任务）、`jobs` / `kill` |
 | **版本档案 / 测试脚本 / 测试记录** | 本地整理 |
 
+## 作者与协作者
+
+- **项目作者**：Holmes-2011（Zero Singularity）
+- **AI 协作者**：DeepSeek Harness（deepseek-flash）、Claude（Anthropic）
+- 完整名单见 [`AUTHORS`](AUTHORS)
+
 > 本项目在 **macOS（Apple Silicon）** 上开发和测试，**没有使用任何 Kali / Linux 虚拟机**。
 > 上游 README 曾建议"去 Kali 里编译"，实测没必要 —— 每一步在 macOS 上都有对应替代。
 
@@ -55,6 +61,7 @@ zeroOS（零度系统） 是一个处于实验阶段（V0.0.1）的开源操作�
 
 ```
 README.md                项目说明（就是本文件）
+AUTHORS                  作者与协作者名单
 LICENSE                  Apache-2.0
 release-notes/           每个版本的 Release 说明文字
 .github/workflows/       推送 v* 标签时自动创建 Release；每次推送自动编译 + QEMU 启动测试
